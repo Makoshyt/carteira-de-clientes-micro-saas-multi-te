@@ -5,18 +5,20 @@ e gerencia seus clientes, com isolamento total entre empresas. Usa somente a
 biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 
 > Estado atual (fase E1, tarefas "estrutura-projeto", "migracao-inicial",
-> "executor-migracoes", "hash-senha", "token-assinado", "nucleo-http" e "api-cadastro-empresa"):
+> "executor-migracoes", "hash-senha", "token-assinado", "nucleo-http", "api-cadastro-empresa"
+> e "api-login-logout"):
 > estrutura do projeto, configuração, migração inicial portável (`migrations/0001_inicial.sql`),
 > executor de migrações (`app/db.py`) chamado pelo `run.py`, hash de senha com scrypt e tokens
 > assinados com sessões no banco (`app/seguranca.py`), núcleo WSGI com roteador, JSON, erros
-> padronizados e exigência de autenticação (`app/web.py`) e as rotas `GET /api/saude` e
-> `POST /api/empresas` (`app/servidor.py`, `app/empresas.py`).
-> As rotas de login/logout e o CRUD entram nas próximas tarefas.
+> padronizados e exigência de autenticação (`app/web.py`) e as rotas `GET /api/saude`,
+> `POST /api/empresas`, `POST /api/login`, `POST /api/logout` e `GET /api/me`
+> (`app/servidor.py`, `app/empresas.py`, `app/autenticacao.py`).
+> O CRUD de clientes entra nas próximas tarefas.
 
 ## Estrutura
 
 ```
-app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py, empresas.py)
+app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py, empresas.py, autenticacao.py)
 migrations/     migrações versionadas em SQL portável (0001_inicial.sql, ...)
 db/             artefatos gerados pela Database Factory (não usados pela aplicação)
 static/         frontend HTML/CSS/JS sem dependências
@@ -51,6 +53,9 @@ sendo reaproveitado nas execuções seguintes.
 |---|---|---|
 | `GET /api/saude` | — | `200 {"status": "ok"}` |
 | `POST /api/empresas` | `{"nome_empresa", "email", "senha"}` | `201 {"empresa_id", "usuario_id", "email"}`; `400` entrada inválida; `409` e-mail já cadastrado |
+| `POST /api/login` | `{"email", "senha"}` | `200 {"token", "expira_em"}`; `400` corpo/tipos inválidos; `401 {"erro": "e-mail ou senha inválidos"}` |
+| `POST /api/logout` | — (exige `Authorization: Bearer <token>`) | `204` sem corpo; depois disso o token recebe `401` |
+| `GET /api/me` | — (exige `Authorization: Bearer <token>`) | `200 {"usuario_id", "email", "empresa_id", "nome_empresa"}`; `401` token ausente, inválido, expirado ou revogado |
 
 Exemplo (dados fictícios):
 
@@ -149,5 +154,13 @@ Os testes usam diretórios temporários (não tocam no banco nem no segredo loca
   são UUID gerados no servidor; ids enviados no corpo são ignorados. E-mail repetido -> 409
   (checado antes; se outro cadastro gravar o mesmo e-mail no meio, o `UNIQUE` do banco gera
   `IntegrityError`, convertido também em 409). A resposta nunca contém senha nem hash.
+- **Login, logout e /api/me** (`app/autenticacao.py`): o login normaliza o e-mail (aparado e em
+  minúsculas, igual ao cadastro) e responde sempre a mesma mensagem genérica no 401, sem revelar
+  se o erro está no e-mail ou na senha. Quando o e-mail não existe, uma verificação scrypt contra
+  um hash fictício é feita mesmo assim, para que o tempo de resposta não denuncie e-mails
+  cadastrados. Campos ausentes ou que não são texto -> 400 (erro de formato, não de credencial).
+  Cada login cria uma sessão própria; `expira_em` (ISO-8601 UTC) = agora + `CARTEIRA_TOKEN_TTL`.
+  O logout apaga só a sessão do token usado (outras sessões do mesmo usuário continuam válidas) e
+  responde 204. `/api/me` consulta usuário e empresa pelos ids da sessão, nunca por dados do cliente.
 - **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta será filtrada pela empresa da sessão.
 - **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).
