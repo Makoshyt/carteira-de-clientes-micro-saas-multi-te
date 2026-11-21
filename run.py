@@ -3,14 +3,14 @@ from pathlib import Path
 from wsgiref.simple_server import make_server
 
 from app.config import carregar
+from app.migracoes import aplicar
 from app.servidor import criar_app
-from db.migrar import migrar
 
 
 def preparar(config):
-    """Cria a pasta do banco (se preciso) e aplica as migrações pendentes."""
+    """Cria a pasta do banco (se preciso) e aplica as migrações pendentes de migrations/."""
     Path(config.db).resolve().parent.mkdir(parents=True, exist_ok=True)
-    return migrar(config.db)
+    return aplicar(config.db)
 
 
 def main():

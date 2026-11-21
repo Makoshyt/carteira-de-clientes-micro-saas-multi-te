@@ -4,16 +4,17 @@ Aplicação local de teste em que cada empresa (tenant) cadastra sua conta, faz 
 e gerencia seus clientes, com isolamento total entre empresas. Usa somente a
 biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 
-> Estado atual (fase E1, tarefa "estrutura-projeto"): estrutura do projeto,
-> configuração, aplicação das migrações e servidor WSGI mínimo (`GET /api/saude`).
+> Estado atual (fase E1, tarefas "estrutura-projeto" e "migracao-inicial"): estrutura do
+> projeto, configuração, migração inicial portável (`migrations/0001_inicial.sql`)
+> aplicada pelo `run.py` e servidor WSGI mínimo (`GET /api/saude`).
 > Cadastro, login e CRUD entram nas próximas tarefas.
 
 ## Estrutura
 
 ```
-app/            pacote Python (config.py, servidor.py)
-db/             migrações versionadas (db/migrations/sqlite e postgres) e db/migrar.py
-migrations/     nota sobre onde ficam as migrações
+app/            pacote Python (config.py, migracoes.py, servidor.py)
+migrations/     migrações versionadas em SQL portável (0001_inicial.sql, ...)
+db/             artefatos gerados pela Database Factory (não usados pela aplicação)
 static/         frontend HTML/CSS/JS sem dependências
 tests/          testes unittest
 run.py          ponto de entrada
@@ -55,8 +56,25 @@ Os testes usam diretórios temporários (não tocam no banco nem no segredo loca
 - **Configuração por ambiente** com validação (porta 1–65535, TTL positivo, segredo mínimo de 32
   caracteres); valores inválidos geram `ErroConfiguracao` em vez de rodar com padrões silenciosos.
   O `repr` da configuração mascara o segredo.
-- **Migrações**: arquivos `NNNN_nome.sql` em `db/migrations/<dialeto>/`, aplicados em ordem por
-  `db/migrar.py` e registrados em `schema_migrations` com sha256 (idempotente; migração aplicada
-  não pode ser alterada). O esquema tem versão equivalente para PostgreSQL (sem driver neste projeto).
-- **Multi-tenant**: tabelas de dados têm `empresas_id`; toda consulta será filtrada pela empresa da sessão.
+- **Migrações**: arquivos `migrations/NNNN_nome.sql`, aplicados em ordem por `app/migracoes.py`
+  (cada um numa transação; se falhar, nada fica aplicado) e registrados em `schema_migrations`
+  com sha256 e data UTC. É idempotente, e uma migração já aplicada não pode ser alterada
+  (mudanças vão num novo `0002_*.sql`).
+- **SQL portável (SQLite e PostgreSQL)**: um único conjunto de arquivos, só com `TEXT`, `VARCHAR(n)`,
+  `CHECK`, `UNIQUE`, `REFERENCES`, `DEFAULT` literal e `CREATE INDEX`. Sem `AUTOINCREMENT`/`SERIAL`/
+  `IDENTITY` e sem funções de data de um banco: **IDs são UUID em texto** gerados em Python e
+  **datas são texto ISO-8601 UTC** de tamanho fixo (`2026-01-31T12:00:00Z`), que comparam e ordenam
+  corretamente como texto (útil para checar expiração de sessão). Um teste rejeita construções
+  específicas de um banco. Não há execução real em PostgreSQL neste projeto (fora do escopo).
+- **Esquema (0001)**: `empresas`, `usuarios` (e-mail único no sistema, `CHECK` que só aceita
+  `senha_hash` no formato `scrypt$...`), `sessoes` (chave estrangeira composta
+  `(usuario_id, empresa_id)` garante que a sessão é da mesma empresa do usuário) e `clientes`
+  (`status` com `CHECK IN ('ativo','inativo')`, padrão `ativo`; índice `(empresa_id, nome)`).
+- **Artefatos da Database Factory em `db/`**: o esquema gerado lá (IDs inteiros com
+  `AUTOINCREMENT`/`IDENTITY`, `strftime`/`now()`, tabela `status_clientes`, e-mail único só por
+  empresa, sem tabela de sessões) contradiz a especificação aprovada, então a aplicação usa
+  `migrations/`. Os arquivos de `db/` não foram alterados (regra de não reescrever migrações).
+  Um banco criado antes com o esquema de `db/` é recusado com uma mensagem clara; como só contém
+  dados fictícios, basta apagá-lo.
+- **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta será filtrada pela empresa da sessão.
 - **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).
