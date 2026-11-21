@@ -1,0 +1,106 @@
+{
+ "multi_tenant": true,
+ "tenant": "empresas",
+ "entidades": [
+  {
+   "nome": "empresas",
+   "campos": [
+    {
+     "nome": "nome",
+     "tipo": "texto",
+     "obrigatorio": true,
+     "unico": true,
+     "referencia": "",
+     "indice": false
+    }
+   ],
+   "por_tenant": false,
+   "descricao": "Contas das empresas"
+  },
+  {
+   "nome": "status_clientes",
+   "campos": [
+    {
+     "nome": "nome",
+     "tipo": "texto",
+     "obrigatorio": true,
+     "unico": true,
+     "referencia": "",
+     "indice": false
+    }
+   ],
+   "por_tenant": false,
+   "descricao": "Status dos clientes"
+  },
+  {
+   "nome": "usuarios",
+   "campos": [
+    {
+     "nome": "email",
+     "tipo": "email",
+     "obrigatorio": true,
+     "unico": true,
+     "referencia": "",
+     "indice": false
+    },
+    {
+     "nome": "senha_hash",
+     "tipo": "senha_hash",
+     "obrigatorio": true,
+     "unico": false,
+     "referencia": "",
+     "indice": false
+    }
+   ],
+   "por_tenant": true,
+   "descricao": "Usuários das empresas"
+  },
+  {
+   "nome": "clientes",
+   "campos": [
+    {
+     "nome": "nome",
+     "tipo": "texto",
+     "obrigatorio": true,
+     "unico": false,
+     "referencia": "",
+     "indice": false
+    },
+    {
+     "nome": "email",
+     "tipo": "email",
+     "obrigatorio": false,
+     "unico": false,
+     "referencia": "",
+     "indice": false
+    },
+    {
+     "nome": "telefone",
+     "tipo": "texto_curto",
+     "obrigatorio": false,
+     "unico": false,
+     "referencia": "",
+     "indice": false
+    },
+    {
+     "nome": "observacoes",
+     "tipo": "texto",
+     "obrigatorio": false,
+     "unico": false,
+     "referencia": "",
+     "indice": false
+    },
+    {
+     "nome": "status",
+     "tipo": "inteiro",
+     "obrigatorio": true,
+     "unico": false,
+     "referencia": "status_clientes",
+     "indice": true
+    }
+   ],
+   "por_tenant": true,
+   "descricao": "Clientes das empresas"
+  }
+ ]
+}

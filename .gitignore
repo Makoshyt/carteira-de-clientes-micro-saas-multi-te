@@ -1,0 +1,8 @@
+.env
+.db/
+*.sqlite3
+*.dump
+*.db
+__pycache__/
+*.pyc
+.carteira_segredo

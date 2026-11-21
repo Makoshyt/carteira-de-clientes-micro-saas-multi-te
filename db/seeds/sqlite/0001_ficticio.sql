@@ -1,0 +1,18 @@
+-- Seeds fictícios gerados pela Database Factory. Nenhum dado real.
+INSERT INTO empresas (nome) VALUES ('nome-1');
+INSERT INTO empresas (nome) VALUES ('nome-2');
+INSERT INTO status_clientes (nome) VALUES ('nome-1');
+INSERT INTO status_clientes (nome) VALUES ('nome-2');
+INSERT INTO status_clientes (nome) VALUES ('nome-3');
+INSERT INTO usuarios (empresas_id, email, senha_hash) VALUES (1, 'pessoa1@exemplo.invalid', '!desativado');
+INSERT INTO usuarios (empresas_id, email, senha_hash) VALUES (1, 'pessoa2@exemplo.invalid', '!desativado');
+INSERT INTO usuarios (empresas_id, email, senha_hash) VALUES (1, 'pessoa3@exemplo.invalid', '!desativado');
+INSERT INTO clientes (empresas_id, nome, email, telefone, observacoes, status) VALUES (1, 'Texto fictício 1', 'pessoa1@exemplo.invalid', 'Item fictício 1', 'Texto fictício 1', 1);
+INSERT INTO clientes (empresas_id, nome, email, telefone, observacoes, status) VALUES (1, 'Texto fictício 2', 'pessoa2@exemplo.invalid', 'Item fictício 2', 'Texto fictício 2', 2);
+INSERT INTO clientes (empresas_id, nome, email, telefone, observacoes, status) VALUES (1, 'Texto fictício 3', 'pessoa3@exemplo.invalid', 'Item fictício 3', 'Texto fictício 3', 3);
+INSERT INTO usuarios (empresas_id, email, senha_hash) VALUES (2, 'pessoa4@exemplo.invalid', '!desativado');
+INSERT INTO usuarios (empresas_id, email, senha_hash) VALUES (2, 'pessoa5@exemplo.invalid', '!desativado');
+INSERT INTO usuarios (empresas_id, email, senha_hash) VALUES (2, 'pessoa6@exemplo.invalid', '!desativado');
+INSERT INTO clientes (empresas_id, nome, email, telefone, observacoes, status) VALUES (2, 'Texto fictício 4', 'pessoa4@exemplo.invalid', 'Item fictício 4', 'Texto fictício 4', 1);
+INSERT INTO clientes (empresas_id, nome, email, telefone, observacoes, status) VALUES (2, 'Texto fictício 5', 'pessoa5@exemplo.invalid', 'Item fictício 5', 'Texto fictício 5', 2);
+INSERT INTO clientes (empresas_id, nome, email, telefone, observacoes, status) VALUES (2, 'Texto fictício 6', 'pessoa6@exemplo.invalid', 'Item fictício 6', 'Texto fictício 6', 3);

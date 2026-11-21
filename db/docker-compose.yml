@@ -1,0 +1,22 @@
+# Alternativa com Docker (gerada pela Database Factory). Não usada por padrão: a fábrica usa o PostgreSQL nativo.
+# Uso: docker compose --env-file .env -f db/docker-compose.yml up -d   (defina POSTGRES_PASSWORD no .env antes)
+services:
+  postgres:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${PGDATABASE:-proj_003_carteira_de_clientes}
+      POSTGRES_USER: ${POSTGRES_USER:-proj_003_carteira_de_clientes_dono}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env}
+    ports:
+      - "127.0.0.1:${PGPORT_DOCKER:-55432}:5432"   # só local; nunca 0.0.0.0
+    volumes:
+      - proj_003_carteira_de_clientes_dados:/var/lib/postgresql
+      - ./migrations/postgres:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  proj_003_carteira_de_clientes_dados:
