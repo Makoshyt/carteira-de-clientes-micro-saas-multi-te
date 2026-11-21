@@ -159,7 +159,16 @@ Cobertura da fase 1:
   - Handlers recebem uma `Requisicao` (método, parâmetros do caminho, query string, cabeçalhos,
     `json()`) e devolvem um objeto (200), `(status, corpo)` ou `(status, corpo, cabeçalhos)`;
     corpo `None` gera resposta vazia (ex.: 204). Respostas em JSON UTF-8 com `Content-Length`,
-    `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`.
+    `X-Content-Type-Options: nosniff`, `Content-Security-Policy` restrita a `'self'` (sem
+    `unsafe-inline`; `object-src 'none'`, `frame-ancestors 'none'`) e `Cache-Control: no-store`.
+- **Arquivos estáticos** (`app/estaticos.py`): `GET /` serve `static/index.html` e
+  `GET /static/<caminho>` serve arquivos de `static/` (rota `{caminho:caminho}`, que pode conter
+  `/`), com `Content-Type` pela extensão (html, css, js, json, txt, svg, png, ico; outras -> 404).
+  Contra path traversal, recebem 404 caminhos vazios, absolutos, com segmento vazio, `.`, `..`,
+  arquivo oculto, `\`, `:` ou byte nulo; além disso o caminho resolvido (seguindo links
+  simbólicos) precisa ficar dentro de `static/` e ser um arquivo regular. Os mesmos cabeçalhos de
+  segurança (nosniff, CSP e `no-store`) valem para as respostas estáticas. Testes em
+  `tests/test_estaticos.py`.
   - Corpo: limitado a 64 KB pelo `Content-Length` **antes** de ler (acima disso, 413). Corpo vazio,
     `Content-Length` inválido ou incompleto, UTF-8 inválido, JSON inválido (inclusive `NaN`/`Infinity`
     e aninhamento excessivo) ou que não seja objeto -> 400.

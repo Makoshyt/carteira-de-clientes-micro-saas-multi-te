@@ -27,7 +27,7 @@ from app.seguranca import validar_token
 
 LIMITE_CORPO = 64 * 1024
 STATUS_DE_ERRO = (400, 401, 404, 405, 409, 413, 500)
-_PARAMETRO = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)\}")
+_PARAMETRO = re.compile(r"\{([A-Za-z_][A-Za-z0-9_]*)(:caminho)?\}")
 _MAX_CAMPOS_QUERY = 50
 
 
@@ -57,7 +57,9 @@ def _compilar(padrao):
     posicao = 0
     for achado in _PARAMETRO.finditer(padrao):
         partes.append(re.escape(padrao[posicao:achado.start()]))
-        partes.append(f"(?P<{achado.group(1)}>[^/]+)")
+        # ``{nome}`` casa um segmento; ``{nome:caminho}`` casa o resto do caminho (com "/").
+        trecho = ".+" if achado.group(2) else "[^/]+"
+        partes.append(f"(?P<{achado.group(1)}>{trecho})")
         posicao = achado.end()
     partes.append(re.escape(padrao[posicao:]))
     return re.compile("".join(partes))
@@ -231,10 +233,24 @@ def exigir_autenticacao(handler):
 
 # --------------------------------------------------------------------------- aplicação
 
+CSP = ("default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self'; "
+       "connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'self'; "
+       "frame-ancestors 'none'")
+
 _CABECALHOS_BASE = (
     ("X-Content-Type-Options", "nosniff"),
+    ("Content-Security-Policy", CSP),
     ("Cache-Control", "no-store"),
 )
+
+
+class RespostaBruta:
+    """Resposta não JSON (ex.: arquivo estático): bytes já prontos e o Content-Type."""
+
+    def __init__(self, dados, content_type, status=200):
+        self.dados = bytes(dados)
+        self.content_type = content_type
+        self.status = status
 
 
 def _normalizar(resultado):
@@ -277,6 +293,13 @@ class Aplicacao:
         start_response(linha_status(status), lista)
         return [dados]
 
+    def _responder_bruto(self, start_response, resposta):
+        lista = [("Content-Type", resposta.content_type),
+                 ("Content-Length", str(len(resposta.dados)))]
+        lista.extend(_CABECALHOS_BASE)
+        start_response(linha_status(resposta.status), lista)
+        return [resposta.dados]
+
     def _registrar_erro(self, environ):
         destino = environ.get("wsgi.errors")
         if destino is not None:
@@ -292,7 +315,10 @@ class Aplicacao:
             try:
                 handler, parametros = self.roteador.resolver(req.metodo, req.caminho)
                 req.parametros = parametros
-                status, corpo, cabecalhos = _normalizar(handler(req))
+                resultado = handler(req)
+                if isinstance(resultado, RespostaBruta):
+                    return self._responder_bruto(start_response, resultado)
+                status, corpo, cabecalhos = _normalizar(resultado)
                 return self._responder(start_response, status, corpo, cabecalhos)
             except ErroHttp as erro:
                 return self._responder(start_response, erro.status,
