@@ -7,8 +7,9 @@ from pathlib import Path
 from app import seguranca
 from app.db import conectar, migrar
 from app.seguranca import gerar_hash, verificar_senha
+from tests import ficticio
 
-SENHA = "senha-ficticia-123"  # valor fictício só para testes
+SENHA = ficticio.senha()  # valor fictício gerado na execução
 FORMATO = re.compile(r"^scrypt\$16384\$8\$1\$[0-9a-f]{32}\$[0-9a-f]{128}$")
 
 
@@ -29,7 +30,8 @@ class TestHashSenha(unittest.TestCase):
         self.assertTrue(verificar_senha(SENHA, self.hash))
 
     def test_senha_errada(self):
-        for errada in ("senha-ficticia-124", SENHA.upper(), SENHA + " ", "", SENHA[:-1]):
+        um_caractere_diferente = SENHA[:-1] + ("1" if SENHA[-1] != "1" else "2")
+        for errada in (um_caractere_diferente, SENHA.upper(), SENHA + " ", "", SENHA[:-1]):
             with self.subTest(errada=errada):
                 self.assertFalse(verificar_senha(errada, self.hash))
 
@@ -47,10 +49,12 @@ class TestHashSenha(unittest.TestCase):
         self.assertEqual(esperado.hex(), dk)
 
     def test_unicode(self):
-        senha = "çãé-ficticia-ü"
-        h = gerar_hash(senha)
-        self.assertTrue(verificar_senha(senha, h))
-        self.assertFalse(verificar_senha("cae-ficticia-u", h))
+        base = ficticio.senha()
+        com_acentos = "çãé-" + base + "-ü"
+        sem_acentos = "cae-" + base + "-u"
+        h = gerar_hash(com_acentos)
+        self.assertTrue(verificar_senha(com_acentos, h))
+        self.assertFalse(verificar_senha(sem_acentos, h))
 
     def test_tipo_invalido_no_gerar(self):
         for valor in (None, b"bytes", 123):

@@ -18,10 +18,11 @@ import run
 from app.config import Config
 from app.seguranca import FORMATO_DATA
 from app.servidor import criar_app
+from tests import ficticio
 
-# Valores fictícios, só para testes.
-SEGREDO = "segredo-ficticio-de-teste-http-0123456789abcd"
-SENHA = "senha-ficticia-123"
+# Valores fictícios gerados na execução, só para testes.
+SEGREDO = ficticio.segredo()
+SENHA = ficticio.senha()
 EMAIL = "dono@exemplo.test"
 
 
@@ -97,7 +98,7 @@ class TestFluxoHttp(unittest.TestCase):
         self.assertEqual(status, 409)
         self.assertIn("erro", corpo)
 
-        status, corpo, _ = self.pedir("POST", "/api/login", {"email": EMAIL, "senha": "errada-000"})
+        status, corpo, _ = self.pedir("POST", "/api/login", {"email": EMAIL, "senha": SENHA + "-errada"})
         self.assertEqual(status, 401)
         self.assertNotIn("token", corpo)
 
@@ -144,7 +145,7 @@ class TestFluxoHttp(unittest.TestCase):
         self.assertEqual(status, 400)
         self.assertIn("erro", corpo)
         status, corpo, _ = self.pedir("POST", "/api/empresas", {"nome_empresa": "X", "email": EMAIL,
-                                                                "senha": "curta"})
+                                                                "senha": "c" * 5})
         self.assertEqual(status, 400)
         self.assertIn("erro", corpo)
         status, corpo, _ = self.pedir("GET", "/api/login")

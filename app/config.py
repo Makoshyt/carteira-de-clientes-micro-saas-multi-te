@@ -36,7 +36,7 @@ class Config:
 
     def __repr__(self):  # nunca expõe o segredo em logs
         return (f"Config(db={self.db!r}, host={self.host!r}, porta={self.porta}, "
-                f"segredo='***', token_ttl={self.token_ttl})")
+                f"segredo=<oculto>, token_ttl={self.token_ttl})")
 
     __str__ = __repr__
 

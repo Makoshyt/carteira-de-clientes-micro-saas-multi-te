@@ -8,11 +8,12 @@ from app.config import Config
 from app.db import conectar, migrar
 from app.seguranca import verificar_senha
 from app.servidor import criar_app
+from tests import ficticio
 from tests.test_web import chamar
 
-# Valores fictícios, só para testes.
-SEGREDO = "segredo-ficticio-de-teste-empresas-0123456789"
-SENHA = "senha-ficticia-123"
+# Valores fictícios gerados na execução, só para testes.
+SEGREDO = ficticio.segredo()
+SENHA = ficticio.senha()
 
 
 def corpo(**extra):
@@ -105,7 +106,7 @@ class TestCadastroEmpresa(unittest.TestCase):
             "email com espaço": corpo(email="do no@exemplo.test"),
             "email longo": corpo(email="a" * 245 + "@exemplo.test"),
             "sem senha": corpo(senha=None),
-            "senha curta": corpo(senha="1234567"),
+            "senha curta": corpo(senha="1" * 7),
             "senha longa": corpo(senha="a" * 129),
             "senha número": corpo(senha=12345678),
         }

@@ -11,11 +11,12 @@ from urllib.parse import urlencode
 from app.config import Config
 from app.db import conectar, migrar
 from app.servidor import criar_app
+from tests import ficticio
 from tests.test_web import chamar
 
-# Valores fictícios, só para testes.
-SEGREDO = "segredo-ficticio-de-teste-clientes-api-012345"
-SENHA = "senha-ficticia-123"
+# Valores fictícios gerados na execução, só para testes.
+SEGREDO = ficticio.segredo()
+SENHA = ficticio.senha()
 
 
 class TestApiClientesColecao(unittest.TestCase):

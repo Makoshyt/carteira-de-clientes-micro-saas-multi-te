@@ -21,13 +21,14 @@ from wsgiref.simple_server import WSGIRequestHandler, make_server
 import run
 from app.config import Config
 from app.servidor import criar_app
+from tests import ficticio
 
 RAIZ = Path(__file__).resolve().parent.parent
 
-# Valores fictícios, só para testes.
-SEGREDO = "segredo-ficticio-de-teste-revisao-final-0123456"
-SENHA_A = "senha-ficticia-aaa-123"
-SENHA_B = "senha-ficticia-bbb-456"
+# Valores fictícios gerados na execução, só para testes.
+SEGREDO = ficticio.segredo()
+SENHA_A = ficticio.senha()
+SENHA_B = ficticio.senha()
 EMAIL_A = "dona.a@exemplo.test"
 EMAIL_B = "dono.b@exemplo.test"
 

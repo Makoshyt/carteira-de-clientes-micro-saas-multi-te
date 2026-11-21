@@ -22,12 +22,13 @@ from app.config import Config
 from app.db import conectar, migrar
 from app.seguranca import gerar_token, sessao_do_token
 from app.servidor import criar_app
+from tests import ficticio
 from tests.test_web import chamar
 
-# Valores fictícios, só para testes.
-SEGREDO = "segredo-ficticio-de-teste-isolamento-4567"
-OUTRO_SEGREDO = "outro-segredo-ficticio-de-teste-isolamento-89"
-SENHA = "senha-ficticia-123"
+# Valores fictícios gerados na execução, só para testes.
+SEGREDO = ficticio.segredo()
+OUTRO_SEGREDO = ficticio.segredo()
+SENHA = ficticio.senha()
 ID_FICTICIO = "00000000-0000-4000-8000-000000000000"
 NOMES = ("Ana Fictícia", "Bruno Fictício", "Mariana Fictícia")
 NAO_ENCONTRADO = {"erro": "cliente não encontrado"}

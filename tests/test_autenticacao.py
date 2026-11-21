@@ -7,11 +7,12 @@ from app.config import Config
 from app.db import conectar, migrar
 from app.seguranca import FORMATO_DATA
 from app.servidor import criar_app
+from tests import ficticio
 from tests.test_web import chamar
 
-# Valores fictícios, só para testes.
-SEGREDO = "segredo-ficticio-de-teste-login-0123456789abc"
-SENHA = "senha-ficticia-123"
+# Valores fictícios gerados na execução, só para testes.
+SEGREDO = ficticio.segredo()
+SENHA = ficticio.senha()
 EMAIL = "dono@exemplo.test"
 
 
@@ -62,7 +63,7 @@ class TestLoginLogoutMe(unittest.TestCase):
         self.assertEqual(self.con.execute("SELECT COUNT(*) FROM sessoes").fetchone()[0], 1)
 
     def test_login_invalido_mensagem_generica(self):
-        senha_errada = self.login(senha="senha-errada-000")
+        senha_errada = self.login(senha=SENHA + "-errada")
         email_inexistente = self.login(email="ninguem@exemplo.test")
         for r in (senha_errada, email_inexistente):
             self.assertEqual(r["codigo"], 401)
@@ -129,7 +130,7 @@ class TestLoginLogoutMe(unittest.TestCase):
 
     def test_token_de_outro_segredo_401(self):
         outro = Config(db=self.db, host="127.0.0.1", porta=8000,
-                       segredo="outro-segredo-ficticio-0123456789abcdef", token_ttl=60)
+                       segredo=ficticio.segredo(), token_ttl=60)
         token = self.login(app=criar_app(outro))["json"]["token"]
         self.assertEqual(self.me(token)["codigo"], 401)
 

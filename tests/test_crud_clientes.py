@@ -19,11 +19,12 @@ from app.config import Config
 from app.db import conectar, migrar
 from app.servidor import criar_app
 from app.web import LIMITE_CORPO
+from tests import ficticio
 from tests.test_web import chamar
 
-# Valores fictícios, só para testes.
-SEGREDO = "segredo-ficticio-de-teste-crud-clientes-0123"
-SENHA = "senha-ficticia-123"
+# Valores fictícios gerados na execução, só para testes.
+SEGREDO = ficticio.segredo()
+SENHA = ficticio.senha()
 ID_FICTICIO = "00000000-0000-4000-8000-000000000000"
 
 

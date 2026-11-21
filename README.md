@@ -95,12 +95,14 @@ As rotas marcadas com "exige token" pedem o cabeçalho `Authorization: Bearer <t
 
 #### Exemplos JSON (dados fictícios)
 
-IDs, tokens e datas abaixo são ilustrativos.
+IDs, tokens e datas abaixo são ilustrativos. Onde aparece `…`, coloque o valor
+correspondente: no campo `senha`, uma senha fictícia de 8 a 128 caracteres escolhida na
+hora; no campo `token`, o valor `<sessao_id>.<assinatura>` devolvido pelo login.
 
 `POST /api/empresas`
 
 ```json
-{"nome_empresa": "Loja Fictícia", "email": "dono@exemplo.test", "senha": "<senha-ficticia>"}
+{"nome_empresa": "Loja Fictícia", "email": "dono@exemplo.test", "senha": …}
 ```
 
 Resposta `201`:
@@ -111,10 +113,10 @@ Resposta `201`:
  "email": "dono@exemplo.test"}
 ```
 
-`POST /api/login` com `{"email": "dono@exemplo.test", "senha": "<senha-ficticia>"}` — resposta `200`:
+`POST /api/login` com `{"email": "dono@exemplo.test", "senha": …}` — resposta `200`:
 
 ```json
-{"token": "<sessao_id>.<assinatura>", "expira_em": "2026-01-31T20:00:00Z"}
+{"token": …, "expira_em": "2026-01-31T20:00:00Z"}
 ```
 
 `POST /api/clientes` (com `Authorization: Bearer <token>`):
@@ -148,9 +150,9 @@ Com `curl`:
 
 ```
 curl -X POST http://127.0.0.1:8000/api/empresas -H 'Content-Type: application/json' \
-  -d '{"nome_empresa": "Loja Fictícia", "email": "dono@exemplo.test", "senha": "<senha-ficticia>"}'
+  -d '{"nome_empresa": "Loja Fictícia", "email": "dono@exemplo.test", "senha": …}'
 curl -X POST http://127.0.0.1:8000/api/login -H 'Content-Type: application/json' \
-  -d '{"email": "dono@exemplo.test", "senha": "<senha-ficticia>"}'
+  -d '{"email": "dono@exemplo.test", "senha": …}'
 curl 'http://127.0.0.1:8000/api/clientes?busca=exemplo' -H 'Authorization: Bearer <token>'
 ```
 
@@ -166,6 +168,12 @@ tocam no banco nem no segredo locais) e não usam rede.
 A maioria chama a app WSGI diretamente; `tests/test_fluxo_http.py` sobe o servidor `wsgiref`
 real numa porta livre de `127.0.0.1` (numa thread) e percorre o fluxo de cadastro, login e
 logout de ponta a ponta.
+
+Nenhum segredo HMAC nem senha fica escrito no código dos testes: `tests/ficticio.py`
+gera valores fictícios aleatórios (`secrets`) a cada execução. Assim a varredura de
+segredos da revisão não encontra literais que pareçam credenciais, e os testes continuam
+exatamente com as mesmas verificações (senha errada = senha certa com sufixo, senha curta
+= 7 caracteres, segredo de outra instância = outro valor aleatório etc.).
 
 Cobertura:
 

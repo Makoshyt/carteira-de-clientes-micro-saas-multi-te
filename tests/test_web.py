@@ -12,9 +12,10 @@ from app.seguranca import criar_sessao, revogar_sessao
 from app.servidor import criar_app
 from app.web import (LIMITE_CORPO, Aplicacao, ErroHttp, Roteador, exigir_autenticacao,
                      token_bearer)
+from tests import ficticio
 
-# Valores fictícios, só para testes.
-SEGREDO = "segredo-ficticio-de-teste-web-0123456789abcdef"
+# Valores fictícios gerados na execução, só para testes.
+SEGREDO = ficticio.segredo()
 HASH_FICTICIO = "scrypt$ficticio"
 DATA = "2026-01-01T00:00:00Z"
 

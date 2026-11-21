@@ -13,11 +13,12 @@ from pathlib import Path
 from app.config import Config
 from app.db import conectar, migrar
 from app.servidor import criar_app
+from tests import ficticio
 from tests.test_web import chamar
 
-# Valores fictícios, só para testes.
-SEGREDO = "segredo-ficticio-de-teste-clientes-item-0123"
-SENHA = "senha-ficticia-123"
+# Valores fictícios gerados na execução, só para testes.
+SEGREDO = ficticio.segredo()
+SENHA = ficticio.senha()
 DATA_ANTIGA = "2000-01-01T00:00:00Z"
 ID_INEXISTENTE = "00000000-0000-4000-8000-000000000000"
 

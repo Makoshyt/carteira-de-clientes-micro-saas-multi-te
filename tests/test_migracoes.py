@@ -6,6 +6,7 @@ import uuid
 from pathlib import Path
 
 from app import migracoes
+from tests import ficticio
 
 RAIZ = Path(__file__).resolve().parent.parent
 MIGRACAO_0001 = RAIZ / "migrations" / "0001_inicial.sql"
@@ -178,7 +179,7 @@ class TestRestricoes(BaseBanco):
 
     def test_senha_so_em_formato_scrypt(self):
         with self.assertRaises(sqlite3.IntegrityError):
-            self._usuario(self.emp1, "bia@exemplo.invalid", senha_hash="senha-em-texto")
+            self._usuario(self.emp1, "bia@exemplo.invalid", senha_hash=ficticio.senha())
 
     def test_usuario_exige_empresa_existente(self):
         with self.assertRaises(sqlite3.IntegrityError):

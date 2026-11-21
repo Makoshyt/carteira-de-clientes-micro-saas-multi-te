@@ -10,9 +10,10 @@ from wsgiref.util import setup_testing_defaults
 
 from app import config as cfg
 from app.servidor import criar_app
+from tests import ficticio
 
 RAIZ = Path(__file__).resolve().parent.parent
-SEGREDO_TESTE = "x" * 64  # valor fictício só para testes
+SEGREDO_TESTE = ficticio.segredo()  # valor fictício gerado na execução
 
 
 class TestConfig(unittest.TestCase):
@@ -57,7 +58,7 @@ class TestConfig(unittest.TestCase):
     def test_valores_invalidos(self):
         for env in ({"CARTEIRA_PORTA": "abc"}, {"CARTEIRA_PORTA": "0"},
                     {"CARTEIRA_PORTA": "70000"}, {"CARTEIRA_TOKEN_TTL": "-5"},
-                    {"CARTEIRA_TOKEN_TTL": "x"}, {"CARTEIRA_SEGREDO": "curto"}):
+                    {"CARTEIRA_TOKEN_TTL": "x"}, {"CARTEIRA_SEGREDO": "c" * 5}):
             with self.subTest(env=env):
                 with self.assertRaises(cfg.ErroConfiguracao):
                     cfg.carregar(env, arquivo_segredo=self.arquivo)

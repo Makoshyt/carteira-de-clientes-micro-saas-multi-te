@@ -9,10 +9,11 @@ from pathlib import Path
 from app.db import conectar, migrar
 from app.seguranca import (assinar, criar_sessao, gerar_token, limpar_sessoes_expiradas,
                            revogar_sessao, sessao_do_token, validar_token)
+from tests import ficticio
 
-# Valores fictícios, só para testes.
-SEGREDO = "segredo-ficticio-de-teste-0123456789abcdef"
-OUTRO_SEGREDO = "outro-segredo-ficticio-de-teste-0123456789"
+# Valores fictícios gerados na execução, só para testes.
+SEGREDO = ficticio.segredo()
+OUTRO_SEGREDO = ficticio.segredo()
 HASH_FICTICIO = "scrypt$ficticio"  # aceito pelo CHECK; estes testes não verificam senha
 DATA = "2026-01-01T00:00:00Z"
 AGORA = datetime(2026, 6, 1, 12, 0, 0, tzinfo=timezone.utc)
