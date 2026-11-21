@@ -4,6 +4,7 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
+from urllib.parse import unquote
 from wsgiref.util import setup_testing_defaults
 
 from app.estaticos import PASTA_PADRAO, resolver_arquivo
@@ -143,6 +144,94 @@ class TestEstaticos(unittest.TestCase):
         self.assertEqual(r["codigo"], 200)
         self.assertEqual(r["headers"]["Content-Type"], "text/html; charset=utf-8")
         self.assertIn(b"<html", r["bruto"].lower())
+
+
+def caminho_como_wsgiref(bruto):
+    """Decodifica o caminho da URL como ``wsgiref.simple_server`` faz para PATH_INFO."""
+    return unquote(bruto.split("?", 1)[0], "iso-8859-1")
+
+
+class TestEstaticosReaisDoProjeto(unittest.TestCase):
+    """Usa a pasta static/ real do projeto, como em http://127.0.0.1:8000/."""
+
+    def setUp(self):
+        self.app = criar_app(None)
+        self.config_py = (PASTA_PADRAO.parent / "app" / "config.py").read_bytes()
+
+    def test_raiz_devolve_html(self):
+        r = requisitar(self.app, "/")
+        self.assertEqual(r["codigo"], 200)
+        self.assertTrue(r["headers"]["Content-Type"].startswith("text/html"))
+        self.assertEqual(r["bruto"], (PASTA_PADRAO / "index.html").read_bytes())
+
+    def test_app_js_com_content_type_javascript(self):
+        r = requisitar(self.app, "/static/app.js")
+        self.assertEqual(r["codigo"], 200)
+        self.assertEqual(r["headers"]["Content-Type"], "text/javascript; charset=utf-8")
+        self.assertEqual(r["bruto"], (PASTA_PADRAO / "app.js").read_bytes())
+        self.assertEqual(r["headers"]["Content-Length"], str(len(r["bruto"])))
+
+    def test_app_css_com_content_type_css(self):
+        r = requisitar(self.app, "/static/app.css")
+        self.assertEqual(r["codigo"], 200)
+        self.assertEqual(r["headers"]["Content-Type"], "text/css; charset=utf-8")
+
+    def test_cabecalhos_de_seguranca_nos_estaticos(self):
+        for caminho in ("/", "/static/app.js", "/static/app.css", "/static/../app/config.py"):
+            with self.subTest(caminho=caminho):
+                h = requisitar(self.app, caminho)["headers"]
+                self.assertEqual(h["X-Content-Type-Options"], "nosniff")
+                csp = h["Content-Security-Policy"]
+                for diretiva in ("default-src 'self'", "script-src 'self'",
+                                 "object-src 'none'", "frame-ancestors 'none'"):
+                    self.assertIn(diretiva, csp)
+                self.assertNotIn("unsafe-inline", csp)
+                self.assertNotIn("unsafe-eval", csp)
+
+    def _assert_404_sem_vazar(self, path_info):
+        r = requisitar(self.app, path_info)
+        self.assertEqual(r["codigo"], 404)
+        self.assertEqual(r["json"], {"erro": "não encontrado"})
+        self.assertNotIn(self.config_py, r["bruto"])
+        self.assertNotIn(b"import", r["bruto"])
+
+    def test_path_traversal_para_codigo_da_app(self):
+        for caminho in ("/static/../app/config.py",
+                        "/static/../../app/config.py",
+                        "/static/./../app/config.py",
+                        "/static/x/../../app/config.py",
+                        "/static/..//app/config.py",
+                        "/static/../app/config.py\x00.js",
+                        "/static/..\\app\\config.py",
+                        "/static/" + str(PASTA_PADRAO.parent / "app" / "config.py"),
+                        "/static/../.env",
+                        "/static/../run.py"):
+            with self.subTest(caminho=caminho):
+                self._assert_404_sem_vazar(caminho)
+
+    def test_path_traversal_codificado(self):
+        """Variantes com percent-encoding, decodificadas como o servidor wsgiref faz."""
+        for bruto in ("/static/%2e%2e/app/config.py",
+                      "/static/%2E%2E/app/config.py",
+                      "/static/%2e%2e%2fapp%2fconfig.py",
+                      "/static/..%2fapp%2fconfig.py",
+                      "/static/.%2e/app/config.py",
+                      "/static/%2e%2e%5capp%5cconfig.py",
+                      "/static/..%5capp%5cconfig.py",
+                      "/static/%2e%2e/app/config.py%00.js",
+                      "/static/%252e%252e/app/config.py",
+                      "/static/%252e%252e%252fapp%252fconfig.py",
+                      "/static/%c0%ae%c0%ae/app/config.py",
+                      "/static/%c0%af..%c0%afapp%c0%afconfig.py",
+                      "/static/%2fetc%2fpasswd",
+                      "/static/%2e%2e/app/config.py?x=1"):
+            for path_info in (caminho_como_wsgiref(bruto), bruto.split("?", 1)[0]):
+                with self.subTest(bruto=bruto, path_info=path_info):
+                    self._assert_404_sem_vazar(path_info)
+
+    def test_arquivo_py_dentro_de_static_nao_e_servido(self):
+        # Extensões fora da lista conhecida nunca são servidas, mesmo dentro de static/.
+        self._assert_404_sem_vazar("/static/app.py")
 
 
 if __name__ == "__main__":

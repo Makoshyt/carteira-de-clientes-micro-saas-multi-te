@@ -171,7 +171,11 @@ Cobertura da fase 1:
   arquivo oculto, `\`, `:` ou byte nulo; além disso o caminho resolvido (seguindo links
   simbólicos) precisa ficar dentro de `static/` e ser um arquivo regular. Os mesmos cabeçalhos de
   segurança (nosniff, CSP e `no-store`) valem para as respostas estáticas. Testes em
-  `tests/test_estaticos.py`.
+  `tests/test_estaticos.py`: usam uma pasta temporária e também a pasta `static/` real
+  (`GET /` em HTML, `/static/app.js` como `text/javascript`), e tentam path traversal até
+  `app/config.py`, inclusive com percent-encoding (`%2e%2e`, `%2f`, `%5c`, `%00`, dupla
+  codificação e UTF-8 inválido). Cada caminho é testado cru e decodificado como o `wsgiref` faz
+  com `PATH_INFO`, e sempre deve dar 404 sem vazar conteúdo.
 - **Frontend** (`static/index.html`, `static/app.css`, `static/app.js`): HTML/CSS/JS puro, sem
   bibliotecas nem recursos externos, e sem script/estilo inline (compatível com a CSP). Abra
   `http://127.0.0.1:8000/` para cadastrar a empresa (nome, e-mail, senha), entrar e sair. O JS
