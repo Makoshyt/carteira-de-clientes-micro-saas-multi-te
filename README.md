@@ -185,6 +185,7 @@ Cobertura:
 | Isolamento entre empresas A e B com clientes de nomes iguais: listagem e busca de B sem nada de A; GET/PUT/DELETE de B sobre id de A com 404 idêntico ao de id inexistente e registro de A intacto no banco; `empresa_id` no corpo do POST/PUT recusado (400) e na query ou em cabeçalhos ignorado; token de A com assinatura válida só acessa A; token de sessão inexistente ou assinado com outro segredo recebe 401 | `test_isolamento.py` |
 | Estáticos: `GET /` e `/static/...` com `Content-Type` certo; path traversal (cru e com percent-encoding) -> 404 | `test_estaticos.py` |
 | Frontend: sem recursos externos nem script inline, ids usados no JS existem no HTML, 401 tratado | `test_frontend.py` |
+| Revisão final: roteiro do teste manual com duas empresas fictícias pelo servidor HTTP real, com as mesmas requisições do `app.js` (cadastrar, entrar, criar, buscar, editar, excluir, sair) e isolamento conferido a cada passo; path traversal em `/static` -> 404; `.env`, bancos `.db`/`.sqlite3` e `.carteira_segredo` ignorados pelo Git | `test_revisao_final.py` |
 
 ## Decisões técnicas
 
