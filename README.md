@@ -94,6 +94,7 @@ Cobertura da fase 1:
 | Repositório e validação de clientes, isolamento no acesso a dados | `test_clientes.py` |
 | `GET`/`POST /api/clientes`: 401 sem token, 201/400, busca e isolamento entre empresas | `test_api_clientes.py` |
 | `GET`/`PUT`/`DELETE /api/clientes/{id}`: 401, 200/204, PUT parcial com 400 citando o campo, 404 idêntico para id inexistente e de outra empresa sem alterar o banco | `test_api_clientes_item.py` |
+| Fluxo CRUD de ponta a ponta: criar (201), entradas inválidas e JSON malformado (400), corpo acima de 64 KB (413), listar, busca sem diferenciar maiúsculas com `%`, `_` e `\` tratados como literais, obter, PUT parcial, excluir e depois 404, e 401 em todas as rotas de clientes sem token válido | `test_crud_clientes.py` |
 
 ## Decisões técnicas
 
