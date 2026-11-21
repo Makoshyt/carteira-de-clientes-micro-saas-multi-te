@@ -5,16 +5,17 @@ e gerencia seus clientes, com isolamento total entre empresas. Usa somente a
 biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 
 > Estado atual (fase E1, tarefas "estrutura-projeto", "migracao-inicial",
-> "executor-migracoes", "hash-senha" e "token-assinado"): estrutura do projeto, configuração,
-> migração inicial portável (`migrations/0001_inicial.sql`), executor de migrações (`app/db.py`)
-> chamado pelo `run.py`, hash de senha com scrypt e tokens assinados com sessões no banco
-> (`app/seguranca.py`) e servidor WSGI mínimo (`GET /api/saude`).
+> "executor-migracoes", "hash-senha", "token-assinado" e "nucleo-http"): estrutura do projeto,
+> configuração, migração inicial portável (`migrations/0001_inicial.sql`), executor de migrações
+> (`app/db.py`) chamado pelo `run.py`, hash de senha com scrypt e tokens assinados com sessões no
+> banco (`app/seguranca.py`) e núcleo WSGI com roteador, JSON, erros padronizados e exigência de
+> autenticação (`app/web.py`), por enquanto só com `GET /api/saude` (`app/servidor.py`).
 > As rotas de cadastro, login/logout e o CRUD entram nas próximas tarefas.
 
 ## Estrutura
 
 ```
-app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, servidor.py)
+app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py)
 migrations/     migrações versionadas em SQL portável (0001_inicial.sql, ...)
 db/             artefatos gerados pela Database Factory (não usados pela aplicação)
 static/         frontend HTML/CSS/JS sem dependências
@@ -107,5 +108,22 @@ Os testes usam diretórios temporários (não tocam no banco nem no segredo loca
     inválida não apaga nada. `limpar_sessoes_expiradas(conexao)` remove sessões vencidas.
   - Por que sessão no servidor em vez de um token autocontido: logout invalida o token de
     verdade (basta apagar a linha) e trocar o segredo invalida todos os tokens de uma vez.
+- **Núcleo HTTP** (`app/web.py`): aplicação WSGI própria servida por `wsgiref.simple_server`.
+  - `Roteador`: rotas por método e padrão de caminho (`/api/clientes/{id}`; um parâmetro não
+    atravessa `/`). Caminho sem rota -> 404; caminho existente com outro método -> 405 com `Allow`.
+  - Handlers recebem uma `Requisicao` (método, parâmetros do caminho, query string, cabeçalhos,
+    `json()`) e devolvem um objeto (200), `(status, corpo)` ou `(status, corpo, cabeçalhos)`;
+    corpo `None` gera resposta vazia (ex.: 204). Respostas em JSON UTF-8 com `Content-Length`,
+    `X-Content-Type-Options: nosniff` e `Cache-Control: no-store`.
+  - Corpo: limitado a 64 KB pelo `Content-Length` **antes** de ler (acima disso, 413). Corpo vazio,
+    `Content-Length` inválido ou incompleto, UTF-8 inválido, JSON inválido (inclusive `NaN`/`Infinity`
+    e aninhamento excessivo) ou que não seja objeto -> 400.
+  - Erros: `ErroHttp(status, mensagem)` vira `{"erro": mensagem}`, só com 400, 401, 404, 405, 409,
+    413 ou 500. Exceção inesperada vira 500 com mensagem genérica; o traceback vai só para o log do
+    servidor (`wsgi.errors`), nunca para a resposta.
+  - Autenticação: o decorador `exigir_autenticacao` lê `Authorization: Bearer <token>` (esquema sem
+    diferenciar maiúsculas), valida com `validar_token` e preenche `req.usuario_id`/`req.empresa_id`;
+    token ausente, malformado, alterado, expirado ou revogado -> 401 com `WWW-Authenticate: Bearer`.
+  - Cada requisição abre a própria conexão SQLite só se precisar e a fecha ao terminar.
 - **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta será filtrada pela empresa da sessão.
 - **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).

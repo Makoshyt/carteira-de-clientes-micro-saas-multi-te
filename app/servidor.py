@@ -1,29 +1,21 @@
-"""Aplicação WSGI mínima (as rotas da API serão adicionadas nas próximas tarefas)."""
-import json
+"""Montagem da aplicação WSGI: registra as rotas da API no roteador de app/web.py.
+
+As rotas de cadastro, login/logout e clientes entram nas próximas tarefas.
+"""
+from app.web import Aplicacao, Roteador
 
 
-def resposta_json(start_response, status, corpo):
-    dados = json.dumps(corpo, ensure_ascii=False).encode("utf-8")
-    start_response(status, [
-        ("Content-Type", "application/json; charset=utf-8"),
-        ("Content-Length", str(len(dados))),
-        ("X-Content-Type-Options", "nosniff"),
-    ])
-    return [dados]
+def saude(req):
+    """GET /api/saude: verificação simples de que o servidor está no ar."""
+    return {"status": "ok"}
+
+
+def criar_roteador():
+    roteador = Roteador()
+    roteador.adicionar("GET", "/api/saude", saude)
+    return roteador
 
 
 def criar_app(config):
     """Cria a aplicação WSGI ligada à configuração informada."""
-
-    def app(environ, start_response):
-        caminho = environ.get("PATH_INFO", "/")
-        metodo = environ.get("REQUEST_METHOD", "GET")
-        if caminho == "/api/saude":
-            if metodo != "GET":
-                return resposta_json(start_response, "405 Method Not Allowed",
-                                     {"erro": "método não permitido"})
-            return resposta_json(start_response, "200 OK", {"status": "ok"})
-        return resposta_json(start_response, "404 Not Found", {"erro": "não encontrado"})
-
-    app.config = config
-    return app
+    return Aplicacao(config, criar_roteador())
