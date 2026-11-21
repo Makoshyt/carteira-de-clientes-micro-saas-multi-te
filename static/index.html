@@ -2,10 +2,54 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Carteira de Clientes</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="/static/app.js" defer></script>
 </head>
 <body>
-  <h1>Carteira de Clientes</h1>
-  <p>Interface em construção.</p>
+  <header class="topo">
+    <h1>Carteira de Clientes</h1>
+    <div id="area-usuario" class="area-usuario" hidden>
+      <span id="usuario-logado"></span>
+      <button type="button" id="botao-sair" class="secundario">Sair</button>
+    </div>
+  </header>
+
+  <main>
+    <p id="mensagem" class="mensagem" role="alert" hidden></p>
+
+    <section id="tela-entrada" class="telas-entrada">
+      <form id="form-login" class="cartao" novalidate>
+        <h2>Entrar</h2>
+        <label>E-mail
+          <input type="email" name="email" autocomplete="username" required maxlength="254">
+        </label>
+        <label>Senha
+          <input type="password" name="senha" autocomplete="current-password" required maxlength="128">
+        </label>
+        <button type="submit">Entrar</button>
+      </form>
+
+      <form id="form-cadastro" class="cartao" novalidate>
+        <h2>Cadastrar empresa</h2>
+        <label>Nome da empresa
+          <input type="text" name="nome_empresa" autocomplete="organization" required maxlength="120">
+        </label>
+        <label>E-mail
+          <input type="email" name="email" autocomplete="email" required maxlength="254">
+        </label>
+        <label>Senha (mínimo 8 caracteres)
+          <input type="password" name="senha" autocomplete="new-password" required minlength="8" maxlength="128">
+        </label>
+        <button type="submit">Cadastrar</button>
+      </form>
+    </section>
+
+    <section id="tela-principal" class="cartao" hidden>
+      <h2 id="titulo-empresa">Sua empresa</h2>
+      <p>Você está conectado.</p>
+    </section>
+  </main>
 </body>
 </html>

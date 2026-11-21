@@ -169,6 +169,14 @@ Cobertura da fase 1:
   simbólicos) precisa ficar dentro de `static/` e ser um arquivo regular. Os mesmos cabeçalhos de
   segurança (nosniff, CSP e `no-store`) valem para as respostas estáticas. Testes em
   `tests/test_estaticos.py`.
+- **Frontend** (`static/index.html`, `static/app.css`, `static/app.js`): HTML/CSS/JS puro, sem
+  bibliotecas nem recursos externos, e sem script/estilo inline (compatível com a CSP). Abra
+  `http://127.0.0.1:8000/` para cadastrar a empresa (nome, e-mail, senha), entrar e sair. O JS
+  usa `fetch` na API, mostra a mensagem `erro` devolvida pela API, guarda o token só em
+  `sessionStorage` (some ao fechar a aba) e, ao carregar, confere a sessão com `GET /api/me`
+  (401 descarta o token). "Sair" chama `POST /api/logout` e apaga o token local mesmo se a API
+  falhar. Todo texto vindo da API ou do usuário entra no DOM por `textContent`, nunca `innerHTML`.
+  Verificações estáticas em `tests/test_frontend.py`.
   - Corpo: limitado a 64 KB pelo `Content-Length` **antes** de ler (acima disso, 413). Corpo vazio,
     `Content-Length` inválido ou incompleto, UTF-8 inválido, JSON inválido (inclusive `NaN`/`Infinity`
     e aninhamento excessivo) ou que não seja objeto -> 400.
