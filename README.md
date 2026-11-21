@@ -14,12 +14,13 @@ biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 > `POST /api/empresas`, `POST /api/login`, `POST /api/logout` e `GET /api/me`
 > (`app/servidor.py`, `app/empresas.py`, `app/autenticacao.py`).
 > Fase E2 (em andamento): camada de acesso a dados de clientes (`app/clientes.py`) com
-> isolamento por empresa; as rotas `/api/clientes` entram nas próximas tarefas.
+> isolamento por empresa e as rotas `GET`/`POST /api/clientes` (`app/api_clientes.py`);
+> as rotas `/api/clientes/{id}` entram nas próximas tarefas.
 
 ## Estrutura
 
 ```
-app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py, empresas.py, autenticacao.py, clientes.py)
+app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py, empresas.py, autenticacao.py, clientes.py, api_clientes.py)
 migrations/     migrações versionadas em SQL portável (0001_inicial.sql, ...)
 db/             artefatos gerados pela Database Factory (não usados pela aplicação)
 static/         frontend HTML/CSS/JS sem dependências
@@ -57,6 +58,8 @@ sendo reaproveitado nas execuções seguintes.
 | `POST /api/login` | `{"email", "senha"}` | `200 {"token", "expira_em"}`; `400` corpo/tipos inválidos; `401 {"erro": "e-mail ou senha inválidos"}` |
 | `POST /api/logout` | — (exige `Authorization: Bearer <token>`) | `204` sem corpo; depois disso o token recebe `401` |
 | `GET /api/me` | — (exige `Authorization: Bearer <token>`) | `200 {"usuario_id", "email", "empresa_id", "nome_empresa"}`; `401` token ausente, inválido, expirado ou revogado |
+| `GET /api/clientes[?busca=texto]` | — (exige token) | `200 [cliente, ...]` só da empresa da sessão, ordenados por nome (máx. 200); `busca` filtra por nome sem diferenciar maiúsculas; `400` busca inválida; `401` sem token válido |
+| `POST /api/clientes` | `{"nome", "email"?, "telefone"?, "observacoes"?, "status"?}` (exige token) | `201` com o cliente (`id`, campos, `criado_em`, `atualizado_em`) e cabeçalho `Location`; `400` citando o campo inválido (inclusive `id`/`empresa_id` enviados); `401` sem token válido |
 
 Exemplo (dados fictícios):
 
@@ -85,6 +88,8 @@ Cobertura da fase 1:
 | Login certo e errado; token adulterado, expirado, ausente ou de outro segredo (401) | `test_autenticacao.py`, `test_token.py`, `test_web.py`, `test_fluxo_http.py` |
 | Logout revoga o token; `/api/me` | `test_autenticacao.py`, `test_fluxo_http.py` |
 | Erros JSON padronizados (400, 401, 404, 405, 409, 413, 500) | `test_web.py`, `test_fluxo_http.py` |
+| Repositório e validação de clientes, isolamento no acesso a dados | `test_clientes.py` |
+| `GET`/`POST /api/clientes`: 401 sem token, 201/400, busca e isolamento entre empresas | `test_api_clientes.py` |
 
 ## Decisões técnicas
 
@@ -192,6 +197,10 @@ Cobertura da fase 1:
   `null`; tipo errado é rejeitado. Campos desconhecidos — inclusive `id` e `empresa_id` — são
   rejeitados com 400 (a empresa vem só da sessão). `atualizar` é parcial: só os campos
   enviados mudam, e uma entrada inválida não altera nada no banco.
+- **Rotas da coleção de clientes** (`app/api_clientes.py`): `GET` e `POST /api/clientes` usam
+  `exigir_autenticacao` e passam ao repositório só `req.empresa_id` (vindo da sessão). Um
+  `empresa_id` enviado no corpo nunca é usado: em vez de ser descartado em silêncio, é
+  recusado com 400, deixando explícito ao cliente da API que a empresa não é escolhível.
 - **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta é filtrada pela empresa da sessão.
 - **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).
   No SQLite, `LOWER` só converte letras ASCII, então a busca ignora maiúsculas/minúsculas em
