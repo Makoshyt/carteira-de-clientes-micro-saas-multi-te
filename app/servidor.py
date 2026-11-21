@@ -2,10 +2,15 @@
 
 Rotas atuais: GET /api/saude, POST /api/empresas (app/empresas.py),
 POST /api/login, POST /api/logout, GET /api/me (app/autenticacao.py) e
-GET/POST /api/clientes (app/api_clientes.py).
-As rotas de um cliente específico (/api/clientes/{id}) entram nas próximas tarefas.
+GET/POST /api/clientes e GET/PUT/DELETE /api/clientes/{id} (app/api_clientes.py).
 """
-from app.api_clientes import criar_cliente, listar_clientes
+from app.api_clientes import (
+    atualizar_cliente,
+    criar_cliente,
+    excluir_cliente,
+    listar_clientes,
+    obter_cliente,
+)
 from app.autenticacao import login, logout, me
 from app.empresas import cadastrar_empresa
 from app.web import Aplicacao, Roteador
@@ -25,6 +30,9 @@ def criar_roteador():
     roteador.adicionar("GET", "/api/me", me)
     roteador.adicionar("GET", "/api/clientes", listar_clientes)
     roteador.adicionar("POST", "/api/clientes", criar_cliente)
+    roteador.adicionar("GET", "/api/clientes/{id}", obter_cliente)
+    roteador.adicionar("PUT", "/api/clientes/{id}", atualizar_cliente)
+    roteador.adicionar("DELETE", "/api/clientes/{id}", excluir_cliente)
     return roteador
 
 

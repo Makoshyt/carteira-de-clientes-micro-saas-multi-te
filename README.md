@@ -14,8 +14,8 @@ biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 > `POST /api/empresas`, `POST /api/login`, `POST /api/logout` e `GET /api/me`
 > (`app/servidor.py`, `app/empresas.py`, `app/autenticacao.py`).
 > Fase E2 (em andamento): camada de acesso a dados de clientes (`app/clientes.py`) com
-> isolamento por empresa e as rotas `GET`/`POST /api/clientes` (`app/api_clientes.py`);
-> as rotas `/api/clientes/{id}` entram nas próximas tarefas.
+> isolamento por empresa e as rotas `GET`/`POST /api/clientes` e
+> `GET`/`PUT`/`DELETE /api/clientes/{id}` (`app/api_clientes.py`).
 
 ## Estrutura
 
@@ -60,6 +60,9 @@ sendo reaproveitado nas execuções seguintes.
 | `GET /api/me` | — (exige `Authorization: Bearer <token>`) | `200 {"usuario_id", "email", "empresa_id", "nome_empresa"}`; `401` token ausente, inválido, expirado ou revogado |
 | `GET /api/clientes[?busca=texto]` | — (exige token) | `200 [cliente, ...]` só da empresa da sessão, ordenados por nome (máx. 200); `busca` filtra por nome sem diferenciar maiúsculas; `400` busca inválida; `401` sem token válido |
 | `POST /api/clientes` | `{"nome", "email"?, "telefone"?, "observacoes"?, "status"?}` (exige token) | `201` com o cliente (`id`, campos, `criado_em`, `atualizado_em`) e cabeçalho `Location`; `400` citando o campo inválido (inclusive `id`/`empresa_id` enviados); `401` sem token válido |
+| `GET /api/clientes/{id}` | — (exige token) | `200` com o cliente; `404 {"erro": "cliente não encontrado"}` se não existir ou for de outra empresa; `401` sem token válido |
+| `PUT /api/clientes/{id}` | qualquer subconjunto de `{"nome", "email", "telefone", "observacoes", "status"}` (exige token) | `200` com o cliente atualizado (só os campos enviados mudam; `atualizado_em` é renovado); `400` citando o campo inválido ou corpo vazio; `404` igual ao do `GET`; `401` sem token válido |
+| `DELETE /api/clientes/{id}` | — (exige token) | `204` sem corpo; `404` igual ao do `GET`; `401` sem token válido |
 
 Exemplo (dados fictícios):
 
@@ -90,6 +93,7 @@ Cobertura da fase 1:
 | Erros JSON padronizados (400, 401, 404, 405, 409, 413, 500) | `test_web.py`, `test_fluxo_http.py` |
 | Repositório e validação de clientes, isolamento no acesso a dados | `test_clientes.py` |
 | `GET`/`POST /api/clientes`: 401 sem token, 201/400, busca e isolamento entre empresas | `test_api_clientes.py` |
+| `GET`/`PUT`/`DELETE /api/clientes/{id}`: 401, 200/204, PUT parcial com 400 citando o campo, 404 idêntico para id inexistente e de outra empresa sem alterar o banco | `test_api_clientes_item.py` |
 
 ## Decisões técnicas
 
@@ -201,6 +205,10 @@ Cobertura da fase 1:
   `exigir_autenticacao` e passam ao repositório só `req.empresa_id` (vindo da sessão). Um
   `empresa_id` enviado no corpo nunca é usado: em vez de ser descartado em silêncio, é
   recusado com 400, deixando explícito ao cliente da API que a empresa não é escolhível.
+- **Rotas de um cliente** (`GET`/`PUT`/`DELETE /api/clientes/{id}`): id inexistente e id de
+  outra empresa devolvem exatamente a mesma resposta (`404 {"erro": "cliente não encontrado"}`),
+  para não revelar que o registro existe. Ids com mais de 64 caracteres viram 404 sem consulta.
+  No `PUT` o corpo é validado antes da busca do registro, então o 400 não depende de o id existir.
 - **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta é filtrada pela empresa da sessão.
 - **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).
   No SQLite, `LOWER` só converte letras ASCII, então a busca ignora maiúsculas/minúsculas em
