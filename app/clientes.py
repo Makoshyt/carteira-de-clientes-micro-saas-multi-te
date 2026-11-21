@@ -23,7 +23,7 @@ Validação: erro de entrada levanta ``ErroHttp(400, mensagem)`` citando o campo
 import re
 import uuid
 
-from app.db import agora_iso
+from app.db import agora_iso, consulta_sql
 from app.empresas import EMAIL_MAX, validar_email
 from app.web import ErroHttp
 
@@ -38,29 +38,29 @@ STATUS_VALIDOS = ("ativo", "inativo")
 STATUS_PADRAO = "ativo"
 CAMPOS = ("nome", "email", "telefone", "observacoes", "status")
 
-_SQL_LISTAR = (
+_SQL_LISTAR = consulta_sql(
     "SELECT id, nome, email, telefone, observacoes, status, criado_em, atualizado_em "
     "FROM clientes WHERE empresa_id = ? "
     "ORDER BY LOWER(nome), nome, id LIMIT ?"
 )
-_SQL_BUSCAR = (
+_SQL_BUSCAR = consulta_sql(
     "SELECT id, nome, email, telefone, observacoes, status, criado_em, atualizado_em "
     "FROM clientes WHERE empresa_id = ? AND LOWER(nome) LIKE LOWER(?) ESCAPE '\\' "
     "ORDER BY LOWER(nome), nome, id LIMIT ?"
 )
-_SQL_OBTER = (
+_SQL_OBTER = consulta_sql(
     "SELECT id, nome, email, telefone, observacoes, status, criado_em, atualizado_em "
     "FROM clientes WHERE empresa_id = ? AND id = ?"
 )
-_SQL_INSERIR = (
+_SQL_INSERIR = consulta_sql(
     "INSERT INTO clientes (id, empresa_id, nome, email, telefone, observacoes, status, "
     "criado_em, atualizado_em) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
 )
-_SQL_ATUALIZAR = (
+_SQL_ATUALIZAR = consulta_sql(
     "UPDATE clientes SET nome = ?, email = ?, telefone = ?, observacoes = ?, status = ?, "
     "atualizado_em = ? WHERE empresa_id = ? AND id = ?"
 )
-_SQL_EXCLUIR = "DELETE FROM clientes WHERE empresa_id = ? AND id = ?"
+_SQL_EXCLUIR = consulta_sql("DELETE FROM clientes WHERE empresa_id = ? AND id = ?")
 
 
 # --------------------------------------------------------------------------- validação

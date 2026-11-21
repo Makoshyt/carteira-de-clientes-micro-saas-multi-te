@@ -5,6 +5,9 @@
 - migrar(conexao, pasta): cria schema_migrations, lê migrations/NNNN_*.sql em
   ordem numérica e aplica, cada uma numa transação própria, só as versões
   ainda não registradas. Rodar de novo não faz nada (idempotente).
+- consulta_sql(texto, estilo): único ponto que conhece o placeholder dos parâmetros
+  (``?`` no sqlite3, ``%s`` no psycopg). Todas as consultas da aplicação passam por ela.
+  Este também é o único módulo da aplicação autorizado a usar PRAGMA.
 
 Cada versão aplicada é registrada com o sha256 do arquivo; se um arquivo já
 aplicado mudar, o executor recusa com ErroMigracao (mudanças de esquema entram
@@ -29,6 +32,45 @@ _CRIAR_CONTROLE = (
 
 class ErroMigracao(RuntimeError):
     """Problema nos arquivos de migração ou no histórico do banco."""
+
+
+# Estilo de parâmetro do driver em uso (nomes da DB-API 2.0, PEP 249):
+# "qmark" -> ? (sqlite3); "format" -> %s (psycopg/PostgreSQL).
+ESTILOS_PARAMETRO = ("qmark", "format")
+ESTILO_PARAMETRO = sqlite3.paramstyle  # "qmark"
+
+
+def consulta_sql(texto, estilo=None):
+    """Adapta os placeholders de uma consulta ao estilo do driver.
+
+    As consultas da aplicação são escritas com ``?``. Com ``estilo="qmark"`` (sqlite3,
+    padrão) o texto volta igual; com ``estilo="format"`` (psycopg) cada ``?`` fora de
+    literais vira ``%s`` e todo ``%`` literal vira ``%%``. Trechos entre aspas simples
+    ou duplas não têm ``?`` convertido. Este é o único lugar que conhece o placeholder.
+    """
+    estilo = ESTILO_PARAMETRO if estilo is None else estilo
+    if estilo not in ESTILOS_PARAMETRO:
+        raise ValueError(f"estilo de parâmetro não suportado: {estilo!r}")
+    if estilo == "qmark":
+        return texto
+    partes = []
+    aspas = None
+    for caractere in texto:
+        if caractere == "%":
+            partes.append("%%")
+            continue
+        if aspas:
+            if caractere == aspas:
+                aspas = None
+        elif caractere in ("'", '"'):
+            aspas = caractere
+        elif caractere == "?":
+            partes.append("%s")
+            continue
+        partes.append(caractere)
+    if aspas:
+        raise ValueError("literal sem aspas de fechamento na consulta")
+    return "".join(partes)
 
 
 def agora_iso():
@@ -82,11 +124,11 @@ def migrar(conexao, pasta=PASTA_MIGRACOES):
     try:
         conexao.execute(_CRIAR_CONTROLE)
         feitas = {linha[0]: linha[1]
-                  for linha in conexao.execute("SELECT versao, sha256 FROM schema_migrations")}
+                  for linha in conexao.execute(consulta_sql("SELECT versao, sha256 FROM schema_migrations"))}
         aplicadas = []
         for versao, arq in migracoes:
-            sql = arq.read_text(encoding="utf-8")
-            resumo = hashlib.sha256(sql.encode("utf-8")).hexdigest()
+            script = arq.read_text(encoding="utf-8")
+            resumo = hashlib.sha256(script.encode("utf-8")).hexdigest()
             if versao in feitas:
                 if feitas[versao] != resumo:
                     raise ErroMigracao(
@@ -95,9 +137,10 @@ def migrar(conexao, pasta=PASTA_MIGRACOES):
                         "NNNN_*.sql) ou, se o banco tiver só dados fictícios, apague-o")
                 continue
             try:
-                conexao.executescript("BEGIN;\n" + sql)
+                conexao.executescript("BEGIN;\n" + script)
                 conexao.execute(
-                    "INSERT INTO schema_migrations (versao, sha256, aplicada_em) VALUES (?, ?, ?)",
+                    consulta_sql("INSERT INTO schema_migrations (versao, sha256, aplicada_em) "
+                                 "VALUES (?, ?, ?)"),
                     (versao, resumo, agora_iso()))
                 conexao.execute("COMMIT")
             except BaseException:

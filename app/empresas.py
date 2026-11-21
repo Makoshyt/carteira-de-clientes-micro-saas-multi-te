@@ -17,7 +17,7 @@ import re
 import sqlite3
 import uuid
 
-from app.db import agora_iso
+from app.db import agora_iso, consulta_sql
 from app.seguranca import gerar_hash
 from app.web import ErroHttp
 
@@ -74,7 +74,8 @@ def validar_senha(valor):
 
 
 def _email_existe(conexao, email):
-    return conexao.execute("SELECT 1 FROM usuarios WHERE email = ?", (email,)).fetchone() is not None
+    return conexao.execute(consulta_sql("SELECT 1 FROM usuarios WHERE email = ?"),
+                           (email,)).fetchone() is not None
 
 
 def cadastrar_empresa(req):
@@ -94,11 +95,12 @@ def cadastrar_empresa(req):
     agora = agora_iso()
     try:
         with conexao:  # commit se tudo der certo; rollback de ambos os INSERTs se algo falhar
-            conexao.execute("INSERT INTO empresas (id, nome, criado_em) VALUES (?, ?, ?)",
-                            (empresa_id, nome, agora))
             conexao.execute(
-                "INSERT INTO usuarios (id, empresa_id, email, senha_hash, criado_em) "
-                "VALUES (?, ?, ?, ?, ?)",
+                consulta_sql("INSERT INTO empresas (id, nome, criado_em) VALUES (?, ?, ?)"),
+                (empresa_id, nome, agora))
+            conexao.execute(
+                consulta_sql("INSERT INTO usuarios (id, empresa_id, email, senha_hash, criado_em) "
+                             "VALUES (?, ?, ?, ?, ?)"),
                 (usuario_id, empresa_id, email, senha_hash, agora))
     except sqlite3.IntegrityError:
         # Corrida: outro cadastro gravou o mesmo e-mail entre a checagem e o INSERT.

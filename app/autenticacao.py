@@ -13,6 +13,7 @@
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from app.db import consulta_sql
 from app.empresas import EMAIL_MAX, SENHA_MAX
 from app.seguranca import FORMATO_DATA, criar_sessao, gerar_hash, revogar_sessao, verificar_senha
 from app.web import ErroHttp, exigir_autenticacao
@@ -48,7 +49,7 @@ def login(req):
     linha = None
     if email and len(email) <= EMAIL_MAX and len(senha) <= SENHA_MAX:
         linha = req.conexao.execute(
-            "SELECT id, empresa_id, senha_hash FROM usuarios WHERE email = ?",
+            consulta_sql("SELECT id, empresa_id, senha_hash FROM usuarios WHERE email = ?"),
             (email,)).fetchone()
     if linha is None:
         verificar_senha(senha[:SENHA_MAX], _hash_para_comparacao_falsa())
@@ -74,9 +75,9 @@ def logout(req):
 def me(req):
     """GET /api/me: dados do usuário e da empresa da sessão."""
     linha = req.conexao.execute(
-        "SELECT u.id, u.email, e.id, e.nome FROM usuarios u "
-        "JOIN empresas e ON e.id = u.empresa_id "
-        "WHERE u.id = ? AND u.empresa_id = ?",
+        consulta_sql("SELECT u.id, u.email, e.id, e.nome FROM usuarios u "
+                     "JOIN empresas e ON e.id = u.empresa_id "
+                     "WHERE u.id = ? AND u.empresa_id = ?"),
         (req.usuario_id, req.empresa_id)).fetchone()
     if linha is None:
         raise ErroHttp(401, "token inválido ou expirado",

@@ -16,6 +16,8 @@ import re
 import secrets
 from datetime import datetime, timedelta, timezone
 
+from app.db import consulta_sql
+
 PREFIXO = "scrypt"
 SCRYPT_N = 2 ** 14
 SCRYPT_R = 8
@@ -168,8 +170,8 @@ def criar_sessao(conexao, segredo, usuario_id, empresa_id, ttl, agora=None):
     sessao_id = secrets.token_urlsafe(TAMANHO_ID_SESSAO)
     with conexao:
         conexao.execute(
-            "INSERT INTO sessoes (id, usuario_id, empresa_id, expira_em, criado_em) "
-            "VALUES (?, ?, ?, ?, ?)",
+            consulta_sql("INSERT INTO sessoes (id, usuario_id, empresa_id, expira_em, criado_em) "
+                         "VALUES (?, ?, ?, ?, ?)"),
             (sessao_id, usuario_id, empresa_id,
              _formatar(momento + timedelta(seconds=ttl)), _formatar(momento)))
     return gerar_token(segredo, sessao_id)
@@ -185,7 +187,7 @@ def validar_token(conexao, segredo, token, agora=None):
     if sessao_id is None:
         return None
     linha = conexao.execute(
-        "SELECT usuario_id, empresa_id FROM sessoes WHERE id = ? AND expira_em > ?",
+        consulta_sql("SELECT usuario_id, empresa_id FROM sessoes WHERE id = ? AND expira_em > ?"),
         (sessao_id, _formatar(_agora(agora)))).fetchone()
     if linha is None:
         return None
@@ -201,13 +203,13 @@ def revogar_sessao(conexao, segredo, token):
     if sessao_id is None:
         return False
     with conexao:
-        cursor = conexao.execute("DELETE FROM sessoes WHERE id = ?", (sessao_id,))
+        cursor = conexao.execute(consulta_sql("DELETE FROM sessoes WHERE id = ?"), (sessao_id,))
     return cursor.rowcount > 0
 
 
 def limpar_sessoes_expiradas(conexao, agora=None):
     """Apaga as sessões já expiradas e devolve quantas foram apagadas."""
     with conexao:
-        cursor = conexao.execute("DELETE FROM sessoes WHERE expira_em <= ?",
+        cursor = conexao.execute(consulta_sql("DELETE FROM sessoes WHERE expira_em <= ?"),
                                  (_formatar(_agora(agora)),))
     return cursor.rowcount

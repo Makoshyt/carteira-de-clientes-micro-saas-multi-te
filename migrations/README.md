@@ -13,7 +13,10 @@ Regras:
 - SQL portável entre SQLite e PostgreSQL: só `TEXT`, `VARCHAR(n)`, `NOT NULL`, `DEFAULT`
   literal, `UNIQUE`, `CHECK`, `REFERENCES` e `CREATE INDEX`. Nada de `AUTOINCREMENT`,
   `SERIAL`, `IDENTITY`, funções de data de um banco específico, `PRAGMA` ou `BEGIN`/`COMMIT`
-  (a transação é do aplicador). Um teste verifica isso.
+  (a transação é do aplicador), `INSERT OR REPLACE`, `datetime('now')` nem tipos dinâmicos
+  (toda coluna declara `TEXT`, `VARCHAR(n)`, `INTEGER`, `BIGINT`, `SMALLINT`, `BOOLEAN` ou
+  `NUMERIC(p,s)`). `tests/test_portabilidade.py` verifica todos os `*.sql` desta pasta. O
+  mapeamento de tipos e como aplicar no PostgreSQL estão no README principal.
 - IDs são UUID em texto gerados em Python; datas são texto ISO-8601 UTC
   (`2026-01-31T12:00:00Z`), preenchidas pela aplicação.
 

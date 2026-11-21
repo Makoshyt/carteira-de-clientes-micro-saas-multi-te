@@ -98,6 +98,7 @@ Cobertura da fase 1:
 | `GET`/`POST /api/clientes`: 401 sem token, 201/400, busca e isolamento entre empresas | `test_api_clientes.py` |
 | `GET`/`PUT`/`DELETE /api/clientes/{id}`: 401, 200/204, PUT parcial com 400 citando o campo, 404 idêntico para id inexistente e de outra empresa sem alterar o banco | `test_api_clientes_item.py` |
 | Fluxo CRUD de ponta a ponta: criar (201), entradas inválidas e JSON malformado (400), corpo acima de 64 KB (413), listar, busca sem diferenciar maiúsculas com `%`, `_` e `\` tratados como literais, obter, PUT parcial, excluir e depois 404, e 401 em todas as rotas de clientes sem token válido | `test_crud_clientes.py` |
+| Portabilidade: `migrations/*.sql` sem construções específicas do SQLite nem tipos dinâmicos, `PRAGMA` só em `app/db.py`, consultas com parâmetros via `consulta_sql` (`?` -> `%s`) | `test_portabilidade.py` |
 | Isolamento entre empresas A e B com clientes de nomes iguais: listagem e busca de B sem nada de A; GET/PUT/DELETE de B sobre id de A com 404 idêntico ao de id inexistente e registro de A intacto no banco; `empresa_id` no corpo do POST/PUT recusado (400) e na query ou em cabeçalhos ignorado; token de A com assinatura válida só acessa A; token de sessão inexistente ou assinado com outro segredo recebe 401 | `test_isolamento.py` |
 
 ## Decisões técnicas
@@ -121,8 +122,52 @@ Cobertura da fase 1:
   `CHECK`, `UNIQUE`, `REFERENCES`, `DEFAULT` literal e `CREATE INDEX`. Sem `AUTOINCREMENT`/`SERIAL`/
   `IDENTITY` e sem funções de data de um banco: **IDs são UUID em texto** gerados em Python e
   **datas são texto ISO-8601 UTC** de tamanho fixo (`2026-01-31T12:00:00Z`), que comparam e ordenam
-  corretamente como texto (útil para checar expiração de sessão). Um teste rejeita construções
-  específicas de um banco. Não há execução real em PostgreSQL neste projeto (fora do escopo).
+  corretamente como texto (útil para checar expiração de sessão). Não há execução real em
+  PostgreSQL neste projeto (fora do escopo). Detalhes em "Portabilidade para PostgreSQL" abaixo.
+
+### Portabilidade para PostgreSQL
+
+`tests/test_portabilidade.py` lê todos os `migrations/*.sql` (sem comentários) e falha se
+encontrar `AUTOINCREMENT`, `INSERT OR REPLACE`/`OR IGNORE`, `REPLACE INTO`, funções de data do
+SQLite (`datetime('now')`, `strftime`, `julianday`...), `PRAGMA`, `WITHOUT ROWID`, tabelas
+`STRICT`, `GLOB`, `COLLATE NOCASE`, `rowid`, `INTEGER PRIMARY KEY`, `SERIAL`/`IDENTITY`, `::`,
+`BEGIN`/`COMMIT` ou **tipos dinâmicos** (coluna sem tipo ou com tipo fora da lista abaixo). O
+mesmo teste verifica as consultas da aplicação: `PRAGMA` só pode aparecer em `app/db.py`
+(que liga `foreign_keys`, coisa que o PostgreSQL já faz sempre) e toda consulta com parâmetros
+passa por `app.db.consulta_sql`.
+
+**Placeholders**: as consultas são escritas com `?` e passam por `consulta_sql(texto, estilo)`, o
+único ponto que conhece o estilo do driver. Com `"qmark"` (sqlite3, padrão) o texto não muda; com
+`"format"` (psycopg) cada `?` fora de literais vira `%s` e `%` literal vira `%%`.
+
+Mapeamento de tipos (os mesmos nomes valem nos dois bancos):
+
+| Uso | Tipo no SQL | SQLite (afinidade) | PostgreSQL |
+|---|---|---|---|
+| IDs (UUID em texto gerado em Python) | `TEXT` | TEXT | `text` (poderia virar `uuid` numa migração futura) |
+| Textos com limite (nome, e-mail, telefone, status) | `VARCHAR(n)` | TEXT (limite não imposto; a aplicação valida) | `varchar(n)` (limite imposto) |
+| Hash de senha, IDs de sessão | `TEXT` | TEXT | `text` |
+| Datas (`2026-01-31T12:00:00Z`) | `VARCHAR(32)` | TEXT | `varchar(32)`; ordena como texto igual a `timestamptz` |
+| Permitidos para colunas futuras | `INTEGER`, `BIGINT`, `SMALLINT`, `BOOLEAN`, `NUMERIC(p,s)` | INTEGER/NUMERIC | mesmos nomes |
+
+Como seria aplicar as migrações no PostgreSQL (não executado aqui; o projeto não usa driver):
+
+1. Criar o banco e a tabela de controle com o mesmo SQL de `app/db.py`
+   (`CREATE TABLE IF NOT EXISTS schema_migrations (...)`, válido nos dois bancos).
+2. Para cada `migrations/NNNN_*.sql` ainda não registrado, em ordem: abrir uma transação, executar
+   o arquivo inteiro (por exemplo `psql -v ON_ERROR_STOP=1 --single-transaction -f arquivo.sql`
+   ou `cursor.execute(conteudo)` no psycopg), inserir `(versao, sha256, aplicada_em)` em
+   `schema_migrations` e dar commit — o mesmo algoritmo do `migrar`. No PostgreSQL o DDL é
+   transacional, então uma migração com erro não deixa resto.
+3. No código, trocar `sqlite3.connect` por `psycopg.connect`, usar `consulta_sql(..., "format")`
+   e capturar `psycopg.errors.UniqueViolation` onde hoje se captura `sqlite3.IntegrityError`.
+   `conexao.execute` existe nos dois drivers; o `PRAGMA foreign_keys` deixa de ser necessário.
+4. Diferenças conhecidas: `VARCHAR(n)` passa a ser imposto pelo banco (a validação da aplicação
+   já usa limites menores ou iguais); `LOWER` no PostgreSQL trata letras acentuadas, no SQLite não;
+   `LIKE` com `ESCAPE '\'` funciona igual com `standard_conforming_strings=on` (padrão).
+
+### Demais decisões
+
 - **Esquema (0001)**: `empresas`, `usuarios` (e-mail único no sistema, `CHECK` que só aceita
   `senha_hash` no formato `scrypt$...`), `sessoes` (chave estrangeira composta
   `(usuario_id, empresa_id)` garante que a sessão é da mesma empresa do usuário) e `clientes`
