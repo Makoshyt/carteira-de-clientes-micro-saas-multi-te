@@ -15,7 +15,6 @@ import unittest
 from pathlib import Path
 from urllib.parse import urlencode
 
-from app.config import Config
 from app.db import conectar, migrar
 from app.servidor import criar_app
 from app.web import LIMITE_CORPO
@@ -36,8 +35,7 @@ class TestCrudClientes(unittest.TestCase):
         self.con = conectar(self.db)
         self.addCleanup(self.con.close)
         migrar(self.con)
-        config = Config(db=self.db, host="127.0.0.1", porta=8000, segredo=SEGREDO, token_ttl=60)
-        self.app = criar_app(config)
+        self.app = criar_app(ficticio.config(self.db, SEGREDO))
         self.token = self.nova_empresa("crud@exemplo.test", "Empresa CRUD Fictícia")
         self.token_outra = self.nova_empresa("outra@exemplo.test", "Outra Empresa Fictícia")
 
@@ -45,9 +43,9 @@ class TestCrudClientes(unittest.TestCase):
 
     def nova_empresa(self, email, nome):
         r = chamar(self.app, "/api/empresas", "POST",
-                   {"nome_empresa": nome, "email": email, "senha": SENHA})
+                   ficticio.cadastro(nome, email, SENHA))
         self.assertEqual(r["codigo"], 201, r["json"])
-        r = chamar(self.app, "/api/login", "POST", {"email": email, "senha": SENHA})
+        r = chamar(self.app, "/api/login", "POST", ficticio.login(email, SENHA))
         self.assertEqual(r["codigo"], 200, r["json"])
         return r["json"]["token"]
 

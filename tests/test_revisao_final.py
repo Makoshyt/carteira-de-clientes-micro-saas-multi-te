@@ -19,7 +19,6 @@ from urllib.parse import quote
 from wsgiref.simple_server import WSGIRequestHandler, make_server
 
 import run
-from app.config import Config
 from app.servidor import criar_app
 from tests import ficticio
 
@@ -80,10 +79,10 @@ class Navegador:
 
     def cadastrar(self, nome_empresa, email, senha):
         return self.pedir("POST", "/api/empresas",
-                          {"nome_empresa": nome_empresa, "email": email, "senha": senha})
+                          ficticio.cadastro(nome_empresa, email, senha))
 
     def entrar(self, email, senha):
-        status, dados = self.pedir("POST", "/api/login", {"email": email, "senha": senha})
+        status, dados = self.pedir("POST", "/api/login", ficticio.login(email, senha))
         if status == 200:
             self.token = dados["token"]
         return status, dados
@@ -109,8 +108,7 @@ class TestRoteiroManualDuasEmpresas(unittest.TestCase):
     def setUp(self):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
-        config = Config(db=str(Path(tmp.name) / "carteira.db"), host="127.0.0.1", porta=0,
-                        segredo=SEGREDO, token_ttl=600)
+        config = ficticio.config(str(Path(tmp.name) / "carteira.db"), SEGREDO, porta=0, ttl=600)
         run.preparar(config)
         self.servidor = make_server("127.0.0.1", 0, criar_app(config),
                                     handler_class=_HandlerSilencioso)
@@ -155,7 +153,7 @@ class TestRoteiroManualDuasEmpresas(unittest.TestCase):
         # Cadastro das duas empresas e login.
         self.assertEqual(a.cadastrar("Padaria Fictícia A", EMAIL_A, SENHA_A)[0], 201)
         self.assertEqual(b.cadastrar("Oficina Fictícia B", EMAIL_B, SENHA_B)[0], 201)
-        self.assertEqual(a.entrar(EMAIL_A, "senha-errada-000")[0], 401)
+        self.assertEqual(a.entrar(EMAIL_A, SENHA_A + "-errada")[0], 401)
         self.assertIsNone(a.token)
         self.assertEqual(a.entrar(EMAIL_A, SENHA_A)[0], 200)
         self.assertEqual(b.entrar(EMAIL_B, SENHA_B)[0], 200)

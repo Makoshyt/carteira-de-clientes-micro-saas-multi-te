@@ -11,7 +11,7 @@ from tests import ficticio
 RAIZ = Path(__file__).resolve().parent.parent
 MIGRACAO_0001 = RAIZ / "migrations" / "0001_inicial.sql"
 DATA = "2026-01-01T00:00:00Z"
-HASH_FICTICIO = "scrypt$16384$8$1$c2Fs$aGFzaA=="  # formato apenas, não é senha real
+HASH_FICTICIO = ficticio.hash_formato_scrypt()  # formato apenas, gerado na execução
 
 
 def _id():
@@ -155,7 +155,8 @@ class TestRestricoes(BaseBanco):
         self.con.execute("INSERT INTO empresas (id, nome, criado_em) VALUES (?, ?, ?)", (eid, nome, DATA))
         return eid
 
-    def _usuario(self, empresa_id, email, senha_hash=HASH_FICTICIO):
+    def _usuario(self, empresa_id, email, senha_hash=None):
+        senha_hash = HASH_FICTICIO if senha_hash is None else senha_hash
         uid = _id()
         self.con.execute(
             "INSERT INTO usuarios (id, empresa_id, email, senha_hash, criado_em) VALUES (?, ?, ?, ?, ?)",

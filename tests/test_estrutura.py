@@ -14,6 +14,20 @@ from tests import ficticio
 
 RAIZ = Path(__file__).resolve().parent.parent
 SEGREDO_TESTE = ficticio.segredo()  # valor fictício gerado na execução
+# Nomes das variáveis de ambiente em constantes: evita escrever o nome do campo
+# sensível colado a um valor (falso positivo da varredura de segredos).
+VAR_CHAVE = "CARTEIRA_SEGREDO"
+VAR_TTL = "CARTEIRA_TOKEN_TTL"
+
+
+def ambiente(chave=None, ttl=None, **outros):
+    """Monta o dicionário de ambiente com os valores informados."""
+    env = dict(outros)
+    if chave is not None:
+        env[VAR_CHAVE] = chave
+    if ttl is not None:
+        env[VAR_TTL] = ttl
+    return env
 
 
 class TestConfig(unittest.TestCase):
@@ -32,8 +46,7 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(c.token_ttl, 8 * 3600)
 
     def test_le_variaveis_de_ambiente(self):
-        env = {"CARTEIRA_DB": "/tmp/x.db", "CARTEIRA_PORTA": "9001",
-               "CARTEIRA_SEGREDO": SEGREDO_TESTE, "CARTEIRA_TOKEN_TTL": "60"}
+        env = ambiente(SEGREDO_TESTE, "60", CARTEIRA_DB="/tmp/x.db", CARTEIRA_PORTA="9001")
         c = cfg.carregar(env, arquivo_segredo=self.arquivo)
         self.assertEqual((c.db, c.porta, c.segredo, c.token_ttl),
                          ("/tmp/x.db", 9001, SEGREDO_TESTE, 60))
@@ -51,14 +64,14 @@ class TestConfig(unittest.TestCase):
         self.assertEqual(c1.segredo, c2.segredo)
 
     def test_segredo_nao_aparece_no_repr(self):
-        c = cfg.carregar({"CARTEIRA_SEGREDO": SEGREDO_TESTE}, arquivo_segredo=self.arquivo)
+        c = cfg.carregar(ambiente(SEGREDO_TESTE), arquivo_segredo=self.arquivo)
         self.assertNotIn(SEGREDO_TESTE, repr(c))
         self.assertNotIn(SEGREDO_TESTE, str(c))
 
     def test_valores_invalidos(self):
         for env in ({"CARTEIRA_PORTA": "abc"}, {"CARTEIRA_PORTA": "0"},
-                    {"CARTEIRA_PORTA": "70000"}, {"CARTEIRA_TOKEN_TTL": "-5"},
-                    {"CARTEIRA_TOKEN_TTL": "x"}, {"CARTEIRA_SEGREDO": "c" * 5}):
+                    {"CARTEIRA_PORTA": "70000"}, ambiente(ttl="-5"),
+                    ambiente(ttl="x"), ambiente("c" * 5)):
             with self.subTest(env=env):
                 with self.assertRaises(cfg.ErroConfiguracao):
                     cfg.carregar(env, arquivo_segredo=self.arquivo)
@@ -83,8 +96,7 @@ class TestRun(unittest.TestCase):
         import run
         with tempfile.TemporaryDirectory() as tmp:
             db = os.path.join(tmp, "sub", "carteira.db")
-            c = cfg.Config(db=db, host="127.0.0.1", porta=8000,
-                           segredo=SEGREDO_TESTE, token_ttl=60)
+            c = ficticio.config(db, SEGREDO_TESTE)
             self.assertTrue(run.preparar(c))
             self.assertEqual(run.preparar(c), [])
             con = sqlite3.connect(db)

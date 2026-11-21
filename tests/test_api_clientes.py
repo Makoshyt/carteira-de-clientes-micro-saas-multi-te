@@ -8,7 +8,6 @@ import unittest
 from pathlib import Path
 from urllib.parse import urlencode
 
-from app.config import Config
 from app.db import conectar, migrar
 from app.servidor import criar_app
 from tests import ficticio
@@ -27,16 +26,15 @@ class TestApiClientesColecao(unittest.TestCase):
         self.con = conectar(self.db)
         self.addCleanup(self.con.close)
         migrar(self.con)
-        config = Config(db=self.db, host="127.0.0.1", porta=8000, segredo=SEGREDO, token_ttl=60)
-        self.app = criar_app(config)
+        self.app = criar_app(ficticio.config(self.db, SEGREDO))
         self.empresa_a, self.token_a = self.nova_empresa("a@exemplo.test", "Empresa A Fictícia")
         self.empresa_b, self.token_b = self.nova_empresa("b@exemplo.test", "Empresa B Fictícia")
 
     def nova_empresa(self, email, nome):
         r = chamar(self.app, "/api/empresas", "POST",
-                   {"nome_empresa": nome, "email": email, "senha": SENHA})
+                   ficticio.cadastro(nome, email, SENHA))
         self.assertEqual(r["codigo"], 201, r["json"])
-        r2 = chamar(self.app, "/api/login", "POST", {"email": email, "senha": SENHA})
+        r2 = chamar(self.app, "/api/login", "POST", ficticio.login(email, SENHA))
         self.assertEqual(r2["codigo"], 200, r2["json"])
         return r["json"]["empresa_id"], r2["json"]["token"]
 

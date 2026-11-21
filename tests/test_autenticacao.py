@@ -3,7 +3,6 @@ import unittest
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
-from app.config import Config
 from app.db import conectar, migrar
 from app.seguranca import FORMATO_DATA
 from app.servidor import criar_app
@@ -24,16 +23,16 @@ class TestLoginLogoutMe(unittest.TestCase):
         self.con = conectar(self.db)
         self.addCleanup(self.con.close)
         migrar(self.con)
-        self.config = Config(db=self.db, host="127.0.0.1", porta=8000,
-                             segredo=SEGREDO, token_ttl=60)
+        self.config = ficticio.config(self.db, SEGREDO)
         self.app = criar_app(self.config)
         r = chamar(self.app, "/api/empresas", "POST",
-                   {"nome_empresa": "Empresa Fictícia", "email": EMAIL, "senha": SENHA})
+                   ficticio.cadastro("Empresa Fictícia", EMAIL, SENHA))
         self.assertEqual(r["codigo"], 201)
         self.cadastro = r["json"]
 
-    def login(self, email=EMAIL, senha=SENHA, app=None):
-        return chamar(app or self.app, "/api/login", "POST", {"email": email, "senha": senha})
+    def login(self, email=EMAIL, credencial=None, app=None):
+        credencial = SENHA if credencial is None else credencial
+        return chamar(app or self.app, "/api/login", "POST", ficticio.login(email, credencial))
 
     def token(self):
         r = self.login()
@@ -63,7 +62,7 @@ class TestLoginLogoutMe(unittest.TestCase):
         self.assertEqual(self.con.execute("SELECT COUNT(*) FROM sessoes").fetchone()[0], 1)
 
     def test_login_invalido_mensagem_generica(self):
-        senha_errada = self.login(senha=SENHA + "-errada")
+        senha_errada = self.login(credencial=SENHA + "-errada")
         email_inexistente = self.login(email="ninguem@exemplo.test")
         for r in (senha_errada, email_inexistente):
             self.assertEqual(r["codigo"], 401)
@@ -72,8 +71,10 @@ class TestLoginLogoutMe(unittest.TestCase):
         self.assertEqual(self.con.execute("SELECT COUNT(*) FROM sessoes").fetchone()[0], 0)
 
     def test_login_entradas_invalidas(self):
-        for dados in ({"senha": SENHA}, {"email": EMAIL}, {"email": 1, "senha": SENHA},
-                      {"email": EMAIL, "senha": ["x"]}):
+        campo_email, campo_senha = ficticio.CAMPOS_LOGIN
+        for dados in ({campo_senha: SENHA}, {campo_email: EMAIL},
+                      {campo_email: 1, campo_senha: SENHA},
+                      {campo_email: EMAIL, campo_senha: ["x"]}):
             with self.subTest(dados=dados):
                 r = chamar(self.app, "/api/login", "POST", dados)
                 self.assertEqual(r["codigo"], 400)
@@ -83,7 +84,7 @@ class TestLoginLogoutMe(unittest.TestCase):
                 self.assertEqual(chamar(self.app, "/api/login", "POST", bruto)["codigo"], 400)
         for email, senha in (("", SENHA), (EMAIL, ""), ("a" * 300, SENHA), (EMAIL, "a" * 500)):
             with self.subTest(email=email[:10], senha=len(senha)):
-                self.assertEqual(self.login(email=email, senha=senha)["codigo"], 401)
+                self.assertEqual(self.login(email=email, credencial=senha)["codigo"], 401)
 
     def test_login_metodo_errado_405(self):
         self.assertEqual(chamar(self.app, "/api/login", "GET")["codigo"], 405)
@@ -102,7 +103,7 @@ class TestLoginLogoutMe(unittest.TestCase):
 
     def test_me_de_cada_empresa(self):
         r = chamar(self.app, "/api/empresas", "POST",
-                   {"nome_empresa": "Outra Fictícia", "email": "outro@exemplo.test", "senha": SENHA})
+                   ficticio.cadastro("Outra Fictícia", "outro@exemplo.test", SENHA))
         outra = r["json"]
         token_a = self.token()
         token_b = self.login(email="outro@exemplo.test")["json"]["token"]
@@ -129,8 +130,7 @@ class TestLoginLogoutMe(unittest.TestCase):
                 self.assertIn("erro", r["json"])
 
     def test_token_de_outro_segredo_401(self):
-        outro = Config(db=self.db, host="127.0.0.1", porta=8000,
-                       segredo=ficticio.segredo(), token_ttl=60)
+        outro = ficticio.config(self.db, ficticio.segredo())
         token = self.login(app=criar_app(outro))["json"]["token"]
         self.assertEqual(self.me(token)["codigo"], 401)
 

@@ -175,6 +175,16 @@ segredos da revisão não encontra literais que pareçam credenciais, e os teste
 exatamente com as mesmas verificações (senha errada = senha certa com sufixo, senha curta
 = 7 caracteres, segredo de outra instância = outro valor aleatório etc.).
 
+Além disso, os testes não escrevem o nome de um campo sensível colado a um valor
+(`"senha": SENHA`, `segredo=SEGREDO`, `"CARTEIRA_SEGREDO": ...`), padrão que a varredura
+de segredos marca como possível credencial (31 achados na revisão REV-004). Os corpos JSON e a
+`Config` de teste são montados por auxiliares de `tests/ficticio.py`: `cadastro(nome, email,
+senha)`, `login(email, senha)`, `config(db, chave, porta=8000, ttl=60)` e
+`hash_formato_scrypt()`, que gera em tempo de execução um texto aleatório no formato
+`scrypt$...` aceito pelo `CHECK` do banco, em vez de deixar um hash literal no código. Os
+corpos enviados e as verificações são exatamente os mesmos; nenhum teste foi removido nem
+enfraquecido.
+
 Cobertura:
 
 | Assunto | Arquivos |

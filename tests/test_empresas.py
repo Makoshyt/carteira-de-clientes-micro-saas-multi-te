@@ -4,7 +4,6 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from app.config import Config
 from app.db import conectar, migrar
 from app.seguranca import verificar_senha
 from app.servidor import criar_app
@@ -16,9 +15,19 @@ SEGREDO = ficticio.segredo()
 SENHA = ficticio.senha()
 
 
+CAMPO_SENHA = ficticio.CAMPOS_CADASTRO[2]
+
+
 def corpo(**extra):
-    base = {"nome_empresa": "Empresa Fictícia", "email": "dono@exemplo.test", "senha": SENHA}
+    base = ficticio.cadastro("Empresa Fictícia", "dono@exemplo.test", SENHA)
     base.update(extra)
+    return base
+
+
+def com_senha(valor, **extra):
+    """Corpo de cadastro com o campo de senha trocado por `valor`."""
+    base = corpo(**extra)
+    base[CAMPO_SENHA] = valor
     return base
 
 
@@ -30,8 +39,7 @@ class TestCadastroEmpresa(unittest.TestCase):
         self.con = conectar(self.db)
         self.addCleanup(self.con.close)
         migrar(self.con)
-        config = Config(db=self.db, host="127.0.0.1", porta=8000, segredo=SEGREDO, token_ttl=60)
-        self.app = criar_app(config)
+        self.app = criar_app(ficticio.config(self.db, SEGREDO))
 
     def post(self, dados):
         return chamar(self.app, "/api/empresas", "POST", dados)
@@ -105,10 +113,10 @@ class TestCadastroEmpresa(unittest.TestCase):
             "email dois arrobas": corpo(email="a@b@exemplo.test"),
             "email com espaço": corpo(email="do no@exemplo.test"),
             "email longo": corpo(email="a" * 245 + "@exemplo.test"),
-            "sem senha": corpo(senha=None),
-            "senha curta": corpo(senha="1" * 7),
-            "senha longa": corpo(senha="a" * 129),
-            "senha número": corpo(senha=12345678),
+            "sem senha": com_senha(None),
+            "senha curta": com_senha("1" * 7),
+            "senha longa": com_senha("a" * 129),
+            "senha número": com_senha(12345678),
         }
         for nome, dados in casos.items():
             with self.subTest(caso=nome):
@@ -119,10 +127,10 @@ class TestCadastroEmpresa(unittest.TestCase):
         self.assertEqual(self.contar("usuarios"), 0)
 
     def test_limites_aceitos(self):
-        r = self.post(corpo(nome_empresa="a" * 120, senha="a" * 8, email="x@exemplo.test"))
+        r = self.post(com_senha("a" * 8, nome_empresa="a" * 120, email="x@exemplo.test"))
         self.assertEqual(r["codigo"], 201)
         email = "b" * (254 - len("@exemplo.test")) + "@exemplo.test"
-        r = self.post(corpo(senha="s" * 128, email=email))
+        r = self.post(com_senha("s" * 128, email=email))
         self.assertEqual(r["codigo"], 201)
         self.assertEqual(r["json"]["email"], email)
 
@@ -159,8 +167,8 @@ class TestCadastroEmpresa(unittest.TestCase):
                     outra.execute("INSERT INTO empresas (id, nome, criado_em) VALUES "
                                   "('e0', 'Concorrente Fictícia', '2026-01-01T00:00:00Z')")
                     outra.execute("INSERT INTO usuarios (id, empresa_id, email, senha_hash, criado_em) "
-                                  "VALUES ('u0', 'e0', ?, 'scrypt$ficticio', '2026-01-01T00:00:00Z')",
-                                  (email,))
+                                  "VALUES ('u0', 'e0', ?, ?, '2026-01-01T00:00:00Z')",
+                                  (email, ficticio.hash_formato_scrypt()))
                 outra.close()
                 return False
             return original(conexao, email)

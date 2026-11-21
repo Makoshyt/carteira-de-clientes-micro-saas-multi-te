@@ -15,7 +15,6 @@ from pathlib import Path
 from wsgiref.simple_server import WSGIRequestHandler, make_server
 
 import run
-from app.config import Config
 from app.seguranca import FORMATO_DATA
 from app.servidor import criar_app
 from tests import ficticio
@@ -36,7 +35,7 @@ class TestFluxoHttp(unittest.TestCase):
         tmp = tempfile.TemporaryDirectory()
         self.addCleanup(tmp.cleanup)
         self.db = str(Path(tmp.name) / "sub" / "carteira.db")
-        config = Config(db=self.db, host="127.0.0.1", porta=0, segredo=SEGREDO, token_ttl=60)
+        config = ficticio.config(self.db, SEGREDO, porta=0)
         self.assertTrue(run.preparar(config))   # primeira vez aplica
         self.assertEqual(run.preparar(config), [])  # segunda vez não faz nada
         self.servidor = make_server("127.0.0.1", 0, criar_app(config),
@@ -85,7 +84,7 @@ class TestFluxoHttp(unittest.TestCase):
 
         status, cadastro, resposta = self.pedir(
             "POST", "/api/empresas",
-            {"nome_empresa": "Empresa Fictícia", "email": EMAIL, "senha": SENHA})
+            ficticio.cadastro("Empresa Fictícia", EMAIL, SENHA))
         self.assertEqual(status, 201)
         self.assertTrue(resposta.getheader("Content-Type").startswith("application/json"))
         (senha_hash,) = self.consultar("SELECT senha_hash FROM usuarios")[0]
@@ -94,15 +93,15 @@ class TestFluxoHttp(unittest.TestCase):
 
         status, corpo, _ = self.pedir(
             "POST", "/api/empresas",
-            {"nome_empresa": "Outra Fictícia", "email": EMAIL.upper(), "senha": SENHA})
+            ficticio.cadastro("Outra Fictícia", EMAIL.upper(), SENHA))
         self.assertEqual(status, 409)
         self.assertIn("erro", corpo)
 
-        status, corpo, _ = self.pedir("POST", "/api/login", {"email": EMAIL, "senha": SENHA + "-errada"})
+        status, corpo, _ = self.pedir("POST", "/api/login", ficticio.login(EMAIL, SENHA + "-errada"))
         self.assertEqual(status, 401)
         self.assertNotIn("token", corpo)
 
-        status, login, _ = self.pedir("POST", "/api/login", {"email": EMAIL, "senha": SENHA})
+        status, login, _ = self.pedir("POST", "/api/login", ficticio.login(EMAIL, SENHA))
         self.assertEqual(status, 200)
         token = login["token"]
 
@@ -121,12 +120,13 @@ class TestFluxoHttp(unittest.TestCase):
 
     def test_tokens_rejeitados_401(self):
         self.pedir("POST", "/api/empresas",
-                   {"nome_empresa": "Empresa Fictícia", "email": EMAIL, "senha": SENHA})
-        token = self.pedir("POST", "/api/login", {"email": EMAIL, "senha": SENHA})[1]["token"]
+                   ficticio.cadastro("Empresa Fictícia", EMAIL, SENHA))
+        token = self.pedir("POST", "/api/login", ficticio.login(EMAIL, SENHA))[1]["token"]
         sessao_id, assinatura = token.split(".")
         trocado = "A" if assinatura[0] != "A" else "B"
         self.assertEqual(self.pedir("GET", "/api/me")[0], 401)
-        self.assertEqual(self.pedir("GET", "/api/me", token=f"{sessao_id}.{trocado}{assinatura[1:]}")[0], 401)
+        adulterado = f"{sessao_id}.{trocado}{assinatura[1:]}"
+        self.assertEqual(self.pedir("GET", "/api/me", token=adulterado)[0], 401)
         self.assertEqual(self.pedir("GET", "/api/me", token=token)[0], 200)
 
         passado = (datetime.now(timezone.utc) - timedelta(seconds=1)).strftime(FORMATO_DATA)
@@ -144,8 +144,7 @@ class TestFluxoHttp(unittest.TestCase):
         status, corpo, _ = self.pedir("POST", "/api/empresas", bruto=b"{")
         self.assertEqual(status, 400)
         self.assertIn("erro", corpo)
-        status, corpo, _ = self.pedir("POST", "/api/empresas", {"nome_empresa": "X", "email": EMAIL,
-                                                                "senha": "c" * 5})
+        status, corpo, _ = self.pedir("POST", "/api/empresas", ficticio.cadastro("X", EMAIL, "c" * 5))
         self.assertEqual(status, 400)
         self.assertIn("erro", corpo)
         status, corpo, _ = self.pedir("GET", "/api/login")

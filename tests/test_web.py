@@ -6,7 +6,6 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from wsgiref.util import setup_testing_defaults
 
-from app.config import Config
 from app.db import conectar, migrar
 from app.seguranca import criar_sessao, revogar_sessao
 from app.servidor import criar_app
@@ -16,7 +15,7 @@ from tests import ficticio
 
 # Valores fictícios gerados na execução, só para testes.
 SEGREDO = ficticio.segredo()
-HASH_FICTICIO = "scrypt$ficticio"
+HASH_FICTICIO = ficticio.hash_formato_scrypt()  # só o formato; gerado na execução
 DATA = "2026-01-01T00:00:00Z"
 
 
@@ -201,8 +200,7 @@ class TestAutenticacao(unittest.TestCase):
             self.con.execute(
                 "INSERT INTO usuarios (id, empresa_id, email, senha_hash, criado_em) "
                 "VALUES (?, ?, ?, ?, ?)", ("u1", "e1", "a@exemplo.test", HASH_FICTICIO, DATA))
-        config = Config(db=self.db, host="127.0.0.1", porta=8000, segredo=SEGREDO, token_ttl=60)
-        self.app = app_de_teste(config)
+        self.app = app_de_teste(ficticio.config(self.db, SEGREDO))
 
     def _get(self, autorizacao=None):
         cab = {} if autorizacao is None else {"Authorization": autorizacao}
