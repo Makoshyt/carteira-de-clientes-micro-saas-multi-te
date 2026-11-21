@@ -1,29 +1,37 @@
 # Carteira de Clientes (Micro SaaS multi-tenant)
 
-Aplicação local de teste em que cada empresa (tenant) cadastra sua conta, faz login
-e gerencia seus clientes, com isolamento total entre empresas. Usa somente a
-biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
+Aplicação local em que cada empresa (tenant) cadastra sua conta com o primeiro usuário,
+faz login e logout e gerencia seus clientes (criar, listar, buscar por nome, editar e
+excluir), com isolamento total entre empresas. Backend e frontend usam somente a
+biblioteca padrão do Python 3 e HTML/CSS/JS puro.
 
-> Estado atual (fase E1, tarefas "estrutura-projeto", "migracao-inicial",
-> "executor-migracoes", "hash-senha", "token-assinado", "nucleo-http", "api-cadastro-empresa"
-> e "api-login-logout"):
-> estrutura do projeto, configuração, migração inicial portável (`migrations/0001_inicial.sql`),
-> executor de migrações (`app/db.py`) chamado pelo `run.py`, hash de senha com scrypt e tokens
-> assinados com sessões no banco (`app/seguranca.py`), núcleo WSGI com roteador, JSON, erros
-> padronizados e exigência de autenticação (`app/web.py`) e as rotas `GET /api/saude`,
-> `POST /api/empresas`, `POST /api/login`, `POST /api/logout` e `GET /api/me`
-> (`app/servidor.py`, `app/empresas.py`, `app/autenticacao.py`).
-> Fase E2 (em andamento): camada de acesso a dados de clientes (`app/clientes.py`) com
-> isolamento por empresa e as rotas `GET`/`POST /api/clientes` e
-> `GET`/`PUT`/`DELETE /api/clientes/{id}` (`app/api_clientes.py`).
-> Fase E3 (em andamento): arquivos estáticos servidos pelo backend e frontend em `static/` com
-> cadastro de empresa, login/logout e a tela de gestão de clientes (lista, busca, criar, editar,
-> excluir).
+> **Aviso — projeto de teste.** Este é um projeto de teste para uso **apenas local**
+> (`127.0.0.1`), sem publicação nem deploy. Use somente **dados fictícios** (por exemplo,
+> e-mails em `exemplo.test`); não cadastre dados pessoais reais nem senhas que você usa de verdade.
+> Não há HTTPS nem limitação de taxa de requisições.
+
+## Funcionalidades
+
+- Cadastro de empresa com o primeiro usuário numa transação só (e-mail único no sistema).
+- Login com token assinado (HMAC-SHA256) ligado a uma sessão no servidor com expiração; logout
+  revoga a sessão.
+- CRUD de clientes (nome obrigatório, e-mail, telefone, observações, status `ativo`/`inativo`).
+- Busca de clientes por nome sem diferenciar maiúsculas de minúsculas.
+- Isolamento multi-tenant: cada empresa só vê, altera e apaga os próprios clientes.
+- Validação de entrada e erros JSON padronizados (`{"erro": "mensagem"}`).
+- Migrações SQL versionadas, idempotentes e portáveis para PostgreSQL.
+- Frontend HTML/CSS/JS sem dependências, servido pelo próprio backend.
+
+## Requisitos
+
+- Python 3 (desenvolvido e testado com Python 3.14). Só a biblioteca padrão é usada:
+  **não há nada a instalar** (`pip install` não é necessário nem há `requirements.txt`).
+- Um navegador moderno para usar o frontend.
 
 ## Estrutura
 
 ```
-app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py, empresas.py, autenticacao.py, clientes.py, api_clientes.py)
+app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py, empresas.py, autenticacao.py, clientes.py, api_clientes.py, estaticos.py)
 migrations/     migrações versionadas em SQL portável (0001_inicial.sql, ...)
 db/             artefatos gerados pela Database Factory (não usados pela aplicação)
 static/         frontend HTML/CSS/JS sem dependências
@@ -37,9 +45,18 @@ run.py          ponto de entrada
 python3 run.py
 ```
 
-Aplica as migrações pendentes no banco e sobe o servidor em `http://127.0.0.1:8000/`.
+Execute a partir da raiz do projeto. O comando aplica as migrações pendentes no banco
+(criando o arquivo e a pasta se preciso) e sobe o servidor em `http://127.0.0.1:8000/`.
+Abra esse endereço no navegador para cadastrar a empresa, entrar, criar, buscar, editar e
+excluir clientes e sair. `Ctrl+C` encerra o servidor.
 
-Variáveis de ambiente:
+Exemplo com outro banco e outra porta:
+
+```
+CARTEIRA_DB=/tmp/carteira-teste.db CARTEIRA_PORTA=8080 python3 run.py
+```
+
+Variáveis de ambiente (todas opcionais):
 
 | Variável | Padrão | Descrição |
 |---|---|---|
@@ -50,9 +67,18 @@ Variáveis de ambiente:
 
 Se `CARTEIRA_SEGREDO` não estiver definido, um segredo é gerado com
 `secrets.token_hex(32)` e gravado em `.carteira_segredo` (permissão 600, ignorado pelo Git),
-sendo reaproveitado nas execuções seguintes.
+sendo reaproveitado nas execuções seguintes. Valores inválidos (porta fora de 1–65535, TTL fora
+de 1 s a 30 dias, segredo curto) interrompem a inicialização com `ErroConfiguracao`.
+
+O arquivo `.env.example` (variáveis `SQLITE_PATH`, `PG*`, `DATABASE_URL`) vem do ambiente da
+Database Factory e **não é lido pela aplicação**; a aplicação também não carrega `.env`
+automaticamente. Use as variáveis `CARTEIRA_*` acima.
 
 ### API disponível
+
+Todas as rotas ficam em `/api/...`, recebem e devolvem JSON (UTF-8) e, em caso de erro,
+respondem `{"erro": "mensagem"}` com o status adequado (400, 401, 404, 405, 409, 413 ou 500).
+As rotas marcadas com "exige token" pedem o cabeçalho `Authorization: Bearer <token>`.
 
 | Método e rota | Corpo | Resposta |
 |---|---|---|
@@ -67,11 +93,65 @@ sendo reaproveitado nas execuções seguintes.
 | `PUT /api/clientes/{id}` | qualquer subconjunto de `{"nome", "email", "telefone", "observacoes", "status"}` (exige token) | `200` com o cliente atualizado (só os campos enviados mudam; `atualizado_em` é renovado); `400` citando o campo inválido ou corpo vazio; `404` igual ao do `GET`; `401` sem token válido |
 | `DELETE /api/clientes/{id}` | — (exige token) | `204` sem corpo; `404` igual ao do `GET`; `401` sem token válido |
 
-Exemplo (dados fictícios):
+#### Exemplos JSON (dados fictícios)
+
+IDs, tokens e datas abaixo são ilustrativos.
+
+`POST /api/empresas`
+
+```json
+{"nome_empresa": "Loja Fictícia", "email": "dono@exemplo.test", "senha": "<senha-ficticia>"}
+```
+
+Resposta `201`:
+
+```json
+{"empresa_id": "0b6f1c2e-0000-4000-8000-000000000001",
+ "usuario_id": "0b6f1c2e-0000-4000-8000-000000000002",
+ "email": "dono@exemplo.test"}
+```
+
+`POST /api/login` com `{"email": "dono@exemplo.test", "senha": "<senha-ficticia>"}` — resposta `200`:
+
+```json
+{"token": "<sessao_id>.<assinatura>", "expira_em": "2026-01-31T20:00:00Z"}
+```
+
+`POST /api/clientes` (com `Authorization: Bearer <token>`):
+
+```json
+{"nome": "Cliente Exemplo", "email": "contato@exemplo.test", "telefone": "+55 (11) 0000-0000",
+ "observacoes": "Cliente fictício", "status": "ativo"}
+```
+
+Resposta `201` (com `Location: /api/clientes/<id>`):
+
+```json
+{"id": "0b6f1c2e-0000-4000-8000-000000000003", "nome": "Cliente Exemplo",
+ "email": "contato@exemplo.test", "telefone": "+55 (11) 0000-0000",
+ "observacoes": "Cliente fictício", "status": "ativo",
+ "criado_em": "2026-01-31T12:00:00Z", "atualizado_em": "2026-01-31T12:00:00Z"}
+```
+
+`PUT /api/clientes/<id>` com `{"status": "inativo"}` — `200` com o cliente completo atualizado.
+
+Erros:
+
+```json
+{"erro": "cliente não encontrado"}
+```
+
+(`404`, igual para id inexistente e para id de outra empresa) e `401` com
+`{"erro": ...}` para token ausente, inválido, expirado ou revogado.
+
+Com `curl`:
 
 ```
 curl -X POST http://127.0.0.1:8000/api/empresas -H 'Content-Type: application/json' \
-  -d '{"nome_empresa": "Loja Fictícia", "email": "dono@exemplo.test", "senha": "<sua-senha>"}'
+  -d '{"nome_empresa": "Loja Fictícia", "email": "dono@exemplo.test", "senha": "<senha-ficticia>"}'
+curl -X POST http://127.0.0.1:8000/api/login -H 'Content-Type: application/json' \
+  -d '{"email": "dono@exemplo.test", "senha": "<senha-ficticia>"}'
+curl 'http://127.0.0.1:8000/api/clientes?busca=exemplo' -H 'Authorization: Bearer <token>'
 ```
 
 ## Como testar
@@ -80,11 +160,14 @@ curl -X POST http://127.0.0.1:8000/api/empresas -H 'Content-Type: application/js
 python3 -m unittest discover -s tests -v
 ```
 
-Os testes usam diretórios temporários (não tocam no banco nem no segredo locais) e não usam rede.
+Execute a partir da raiz do projeto (`python3 -m unittest discover -s tests` sem `-v` também
+funciona). Não há nada a instalar nem banco externo: os testes usam diretórios temporários (não
+tocam no banco nem no segredo locais) e não usam rede.
 A maioria chama a app WSGI diretamente; `tests/test_fluxo_http.py` sobe o servidor `wsgiref`
-real numa porta livre de `127.0.0.1` (numa thread) e percorre o fluxo da fase 1 de ponta a ponta.
+real numa porta livre de `127.0.0.1` (numa thread) e percorre o fluxo de cadastro, login e
+logout de ponta a ponta.
 
-Cobertura da fase 1:
+Cobertura:
 
 | Assunto | Arquivos |
 |---|---|
@@ -100,8 +183,25 @@ Cobertura da fase 1:
 | Fluxo CRUD de ponta a ponta: criar (201), entradas inválidas e JSON malformado (400), corpo acima de 64 KB (413), listar, busca sem diferenciar maiúsculas com `%`, `_` e `\` tratados como literais, obter, PUT parcial, excluir e depois 404, e 401 em todas as rotas de clientes sem token válido | `test_crud_clientes.py` |
 | Portabilidade: `migrations/*.sql` sem construções específicas do SQLite nem tipos dinâmicos, `PRAGMA` só em `app/db.py`, consultas com parâmetros via `consulta_sql` (`?` -> `%s`) | `test_portabilidade.py` |
 | Isolamento entre empresas A e B com clientes de nomes iguais: listagem e busca de B sem nada de A; GET/PUT/DELETE de B sobre id de A com 404 idêntico ao de id inexistente e registro de A intacto no banco; `empresa_id` no corpo do POST/PUT recusado (400) e na query ou em cabeçalhos ignorado; token de A com assinatura válida só acessa A; token de sessão inexistente ou assinado com outro segredo recebe 401 | `test_isolamento.py` |
+| Estáticos: `GET /` e `/static/...` com `Content-Type` certo; path traversal (cru e com percent-encoding) -> 404 | `test_estaticos.py` |
+| Frontend: sem recursos externos nem script inline, ids usados no JS existem no HTML, 401 tratado | `test_frontend.py` |
 
 ## Decisões técnicas
+
+Resumo:
+
+| Assunto | Decisão |
+|---|---|
+| Servidor | `wsgiref.simple_server` com uma app WSGI própria (`app/web.py`), ligado só em `127.0.0.1` |
+| Multi-tenant | `empresa_id` vem **sempre da sessão** do token; todo SQL de clientes tem `WHERE empresa_id = ?`; `empresa_id` enviado no corpo é recusado (400) e na query/cabeçalhos é ignorado |
+| Recurso de outro tenant | responde **404** idêntico ao de id inexistente, sem revelar que o registro existe e sem alterar nada |
+| Token | `<sessao_id>.<HMAC-SHA256>` que referencia uma linha de `sessoes` com expiração; logout apaga a sessão (revogação real) |
+| Senha | `hashlib.scrypt` com n=2^14, r=8, p=1, dklen=64 e sal aleatório de 16 bytes por usuário; senha de 8 a 128 caracteres |
+| Portabilidade | IDs UUID em texto gerados em Python, datas ISO-8601 UTC em texto, só tipos/constraints comuns a SQLite e PostgreSQL, placeholders convertidos em `consulta_sql` |
+| Migrações | `migrations/NNNN_nome.sql` em ordem, cada uma numa transação, registradas em `schema_migrations`; idempotente |
+| Limitações | ver o último item desta seção |
+
+Detalhes:
 
 - **Só biblioteca padrão**: `wsgiref.simple_server` com uma app WSGI própria, `sqlite3`, `hashlib`, `secrets`, `hmac`.
 - **Bind só em 127.0.0.1**: o host não é configurável, para que o servidor nunca fique exposto na rede.
@@ -209,6 +309,16 @@ Como seria aplicar as migrações no PostgreSQL (não executado aqui; o projeto 
     corpo `None` gera resposta vazia (ex.: 204). Respostas em JSON UTF-8 com `Content-Length`,
     `X-Content-Type-Options: nosniff`, `Content-Security-Policy` restrita a `'self'` (sem
     `unsafe-inline`; `object-src 'none'`, `frame-ancestors 'none'`) e `Cache-Control: no-store`.
+  - Corpo: limitado a 64 KB pelo `Content-Length` **antes** de ler (acima disso, 413). Corpo vazio,
+    `Content-Length` inválido ou incompleto, UTF-8 inválido, JSON inválido (inclusive `NaN`/`Infinity`
+    e aninhamento excessivo) ou que não seja objeto -> 400.
+  - Erros: `ErroHttp(status, mensagem)` vira `{"erro": mensagem}`, só com 400, 401, 404, 405, 409,
+    413 ou 500. Exceção inesperada vira 500 com mensagem genérica; o traceback vai só para o log do
+    servidor (`wsgi.errors`), nunca para a resposta.
+  - Autenticação: o decorador `exigir_autenticacao` lê `Authorization: Bearer <token>` (esquema sem
+    diferenciar maiúsculas), valida com `validar_token` e preenche `req.usuario_id`/`req.empresa_id`;
+    token ausente, malformado, alterado, expirado ou revogado -> 401 com `WWW-Authenticate: Bearer`.
+  - Cada requisição abre a própria conexão SQLite só se precisar e a fecha ao terminar.
 - **Arquivos estáticos** (`app/estaticos.py`): `GET /` serve `static/index.html` e
   `GET /static/<caminho>` serve arquivos de `static/` (rota `{caminho:caminho}`, que pode conter
   `/`), com `Content-Type` pela extensão (html, css, js, json, txt, svg, png, ico; outras -> 404).
@@ -239,16 +349,6 @@ Como seria aplicar as migrações no PostgreSQL (não executado aqui; o projeto 
   formulário são limpos para não deixar dados de uma empresa na página.
   Verificações estáticas em `tests/test_frontend.py` (inclusive que todo id/campo usado no JS
   existe no HTML e que toda chamada de clientes passa pelo tratamento de 401).
-  - Corpo: limitado a 64 KB pelo `Content-Length` **antes** de ler (acima disso, 413). Corpo vazio,
-    `Content-Length` inválido ou incompleto, UTF-8 inválido, JSON inválido (inclusive `NaN`/`Infinity`
-    e aninhamento excessivo) ou que não seja objeto -> 400.
-  - Erros: `ErroHttp(status, mensagem)` vira `{"erro": mensagem}`, só com 400, 401, 404, 405, 409,
-    413 ou 500. Exceção inesperada vira 500 com mensagem genérica; o traceback vai só para o log do
-    servidor (`wsgi.errors`), nunca para a resposta.
-  - Autenticação: o decorador `exigir_autenticacao` lê `Authorization: Bearer <token>` (esquema sem
-    diferenciar maiúsculas), valida com `validar_token` e preenche `req.usuario_id`/`req.empresa_id`;
-    token ausente, malformado, alterado, expirado ou revogado -> 401 com `WWW-Authenticate: Bearer`.
-  - Cada requisição abre a própria conexão SQLite só se precisar e a fecha ao terminar.
 - **Cadastro de empresa** (`app/empresas.py`, `POST /api/empresas`): valida `nome_empresa`
   (texto, 1 a 120 caracteres após aparar espaços, sem caracteres de controle), `email` (texto,
   aparado e convertido para minúsculas, até 254 caracteres, formato básico `local@dominio.tld`
@@ -291,6 +391,16 @@ Como seria aplicar as migrações no PostgreSQL (não executado aqui; o projeto 
   para não revelar que o registro existe. Ids com mais de 64 caracteres viram 404 sem consulta.
   No `PUT` o corpo é validado antes da busca do registro, então o 400 não depende de o id existir.
 - **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta é filtrada pela empresa da sessão.
-- **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).
-  No SQLite, `LOWER` só converte letras ASCII, então a busca ignora maiúsculas/minúsculas em
-  letras sem acento, mas não em letras acentuadas (`Á` x `á`); no PostgreSQL `LOWER` trata Unicode.
+- **Limitações conhecidas**:
+  - Servidor de desenvolvimento `wsgiref` single-thread: atende uma requisição por vez e não é
+    adequado para produção; uso só local.
+  - Sem HTTPS/TLS e sem limitação de taxa de requisições (fora do escopo); o token trafega em
+    texto puro, o que só é aceitável em `127.0.0.1`.
+  - Um único usuário por empresa (sem convites, papéis, recuperação de senha nem verificação de e-mail).
+  - Listagem limitada a 200 clientes por resposta, sem paginação.
+  - Sessões vencidas ficam no banco até `limpar_sessoes_expiradas` ser chamada (já são recusadas
+    na validação, então não dão acesso).
+  - Nenhuma execução real em PostgreSQL: a compatibilidade é garantida por convenção e pelo
+    teste estático `tests/test_portabilidade.py`.
+  - No SQLite, `LOWER` só converte letras ASCII, então a busca ignora maiúsculas/minúsculas em
+    letras sem acento, mas não em letras acentuadas (`Á` x `á`); no PostgreSQL `LOWER` trata Unicode.
