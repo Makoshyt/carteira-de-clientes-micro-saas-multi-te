@@ -5,10 +5,11 @@ e gerencia seus clientes, com isolamento total entre empresas. Usa somente a
 biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 
 > Estado atual (fase E1, tarefas "estrutura-projeto", "migracao-inicial",
-> "executor-migracoes" e "hash-senha"): estrutura do projeto, configuração, migração inicial portável
-> (`migrations/0001_inicial.sql`), executor de migrações (`app/db.py`) chamado pelo `run.py`,
-> hash de senha com scrypt (`app/seguranca.py`) e servidor WSGI mínimo (`GET /api/saude`).
-> Cadastro, login e CRUD entram nas próximas tarefas.
+> "executor-migracoes", "hash-senha" e "token-assinado"): estrutura do projeto, configuração,
+> migração inicial portável (`migrations/0001_inicial.sql`), executor de migrações (`app/db.py`)
+> chamado pelo `run.py`, hash de senha com scrypt e tokens assinados com sessões no banco
+> (`app/seguranca.py`) e servidor WSGI mínimo (`GET /api/saude`).
+> As rotas de cadastro, login/logout e o CRUD entram nas próximas tarefas.
 
 ## Estrutura
 
@@ -91,5 +92,20 @@ Os testes usam diretórios temporários (não tocam no banco nem no segredo loca
   malformados ou com parâmetros fora de limites seguros (n até 2^20, r até 32, p até 16, hex
   estrito) devolvem `False` em vez de exceção, evitando consumo excessivo de memória se o banco
   for adulterado. O tamanho mínimo de senha será validado na camada da API.
+- **Tokens e sessões** (`app/seguranca.py`): o token tem o formato `<sessao_id>.<assinatura>`, em
+  que `sessao_id` é aleatório (`secrets.token_urlsafe(32)`, 256 bits) e a assinatura é
+  HMAC-SHA256(segredo, sessao_id) em base64url sem `=`. O token não carrega dados do usuário: ele
+  só referencia uma linha de `sessoes`, que guarda `usuario_id`, `empresa_id` e `expira_em`.
+  - `criar_sessao(conexao, segredo, usuario_id, empresa_id, ttl)` grava a sessão (expira em `ttl`
+    segundos, `CARTEIRA_TOKEN_TTL`) e devolve o token.
+  - `validar_token(conexao, segredo, token)` confere formato e tamanho, compara a assinatura com
+    `hmac.compare_digest` (tempo constante) **antes** de tocar no banco e então busca a sessão
+    ainda não expirada (`expira_em > agora`, comparação de texto ISO-8601 UTC). Devolve
+    `(usuario_id, empresa_id)` ou `None` para token malformado, alterado, assinado com outro
+    segredo, expirado ou revogado. A empresa usada pela API virá sempre daqui, nunca do cliente.
+  - `revogar_sessao(conexao, segredo, token)` (logout) apaga a sessão; um token com assinatura
+    inválida não apaga nada. `limpar_sessoes_expiradas(conexao)` remove sessões vencidas.
+  - Por que sessão no servidor em vez de um token autocontido: logout invalida o token de
+    verdade (basta apagar a linha) e trocar o segredo invalida todos os tokens de uma vez.
 - **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta será filtrada pela empresa da sessão.
 - **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).

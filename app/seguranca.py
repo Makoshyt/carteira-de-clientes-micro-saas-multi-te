@@ -1,13 +1,20 @@
-"""Hash e verificação de senhas com hashlib.scrypt.
+"""Segurança: hash de senhas com hashlib.scrypt e tokens assinados de sessão.
 
-Formato gravado: ``scrypt$n$r$p$sal_hex$hash_hex``. Os parâmetros ficam no próprio
-valor, então hashes antigos continuam verificáveis se os padrões mudarem no futuro.
+Senhas — formato gravado: ``scrypt$n$r$p$sal_hex$hash_hex``. Os parâmetros ficam no
+próprio valor, então hashes antigos continuam verificáveis se os padrões mudarem.
+
+Tokens — formato ``<sessao_id>.<assinatura>``, em que a assinatura é
+HMAC-SHA256(segredo, sessao_id) em base64url sem ``=``. O token só referencia uma
+linha da tabela ``sessoes`` (que guarda usuário, empresa e expiração); logout apaga
+a linha, invalidando o token mesmo que a assinatura continue correta.
 """
 
+import base64
 import hashlib
 import hmac
 import re
 import secrets
+from datetime import datetime, timedelta, timezone
 
 PREFIXO = "scrypt"
 SCRYPT_N = 2 ** 14
@@ -90,3 +97,117 @@ def verificar_senha(senha, armazenado):
     except (ValueError, UnicodeEncodeError, MemoryError):
         return False
     return hmac.compare_digest(calculado, esperado)
+
+
+# --------------------------------------------------------------------------- tokens
+
+FORMATO_DATA = "%Y-%m-%dT%H:%M:%SZ"  # mesmo formato ISO-8601 UTC de app/db.agora_iso
+TAMANHO_ID_SESSAO = 32               # bytes aleatórios (secrets.token_urlsafe) -> 43 caracteres
+TAMANHO_MAXIMO_TOKEN = 256
+_ID_SESSAO = re.compile(r"[A-Za-z0-9_-]{16,128}")
+_ASSINATURA = re.compile(r"[A-Za-z0-9_-]{43}")  # 32 bytes do SHA-256 em base64url sem '='
+
+
+def _bytes_segredo(segredo):
+    if isinstance(segredo, str):
+        segredo = segredo.encode("utf-8")
+    if not isinstance(segredo, (bytes, bytearray)) or not segredo:
+        raise ValueError("segredo HMAC ausente ou inválido")
+    return bytes(segredo)
+
+
+def _agora(agora):
+    return datetime.now(timezone.utc) if agora is None else agora
+
+
+def _formatar(momento):
+    return momento.astimezone(timezone.utc).strftime(FORMATO_DATA)
+
+
+def assinar(segredo, sessao_id):
+    """HMAC-SHA256(segredo, sessao_id) em base64url sem preenchimento."""
+    digest = hmac.new(_bytes_segredo(segredo), sessao_id.encode("ascii"), hashlib.sha256).digest()
+    return base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
+
+
+def gerar_token(segredo, sessao_id):
+    """Monta ``<sessao_id>.<assinatura>``."""
+    if not isinstance(sessao_id, str) or not _ID_SESSAO.fullmatch(sessao_id):
+        raise ValueError("id de sessão inválido")
+    return f"{sessao_id}.{assinar(segredo, sessao_id)}"
+
+
+def sessao_do_token(segredo, token):
+    """Devolve o sessao_id se o formato e a assinatura do token conferem; senão None.
+
+    Não consulta o banco. A assinatura é comparada com hmac.compare_digest.
+    """
+    if not isinstance(token, str) or not 0 < len(token) <= TAMANHO_MAXIMO_TOKEN:
+        return None
+    partes = token.split(".")
+    if len(partes) != 2:
+        return None
+    sessao_id, assinatura = partes
+    if not _ID_SESSAO.fullmatch(sessao_id) or not _ASSINATURA.fullmatch(assinatura):
+        return None
+    esperada = assinar(segredo, sessao_id)
+    if not hmac.compare_digest(esperada.encode("ascii"), assinatura.encode("ascii")):
+        return None
+    return sessao_id
+
+
+def criar_sessao(conexao, segredo, usuario_id, empresa_id, ttl, agora=None):
+    """Grava uma sessão nova (expira em ``ttl`` segundos) e devolve o token assinado.
+
+    Faz commit da transação da conexão.
+    """
+    if not isinstance(ttl, int) or isinstance(ttl, bool) or ttl <= 0:
+        raise ValueError("ttl deve ser um inteiro positivo")
+    _bytes_segredo(segredo)  # falha antes de gravar se o segredo for inválido
+    momento = _agora(agora)
+    sessao_id = secrets.token_urlsafe(TAMANHO_ID_SESSAO)
+    with conexao:
+        conexao.execute(
+            "INSERT INTO sessoes (id, usuario_id, empresa_id, expira_em, criado_em) "
+            "VALUES (?, ?, ?, ?, ?)",
+            (sessao_id, usuario_id, empresa_id,
+             _formatar(momento + timedelta(seconds=ttl)), _formatar(momento)))
+    return gerar_token(segredo, sessao_id)
+
+
+def validar_token(conexao, segredo, token, agora=None):
+    """Devolve ``(usuario_id, empresa_id)`` da sessão do token, ou None.
+
+    Recusa (None) token malformado, com assinatura errada, de sessão inexistente
+    (revogada por logout) ou expirada. A assinatura é conferida antes do banco.
+    """
+    sessao_id = sessao_do_token(segredo, token)
+    if sessao_id is None:
+        return None
+    linha = conexao.execute(
+        "SELECT usuario_id, empresa_id FROM sessoes WHERE id = ? AND expira_em > ?",
+        (sessao_id, _formatar(_agora(agora)))).fetchone()
+    if linha is None:
+        return None
+    return (linha[0], linha[1])
+
+
+def revogar_sessao(conexao, segredo, token):
+    """Logout: apaga a sessão do token. Devolve True se uma sessão foi apagada.
+
+    Token com assinatura inválida não apaga nada. Faz commit da transação da conexão.
+    """
+    sessao_id = sessao_do_token(segredo, token)
+    if sessao_id is None:
+        return False
+    with conexao:
+        cursor = conexao.execute("DELETE FROM sessoes WHERE id = ?", (sessao_id,))
+    return cursor.rowcount > 0
+
+
+def limpar_sessoes_expiradas(conexao, agora=None):
+    """Apaga as sessões já expiradas e devolve quantas foram apagadas."""
+    with conexao:
+        cursor = conexao.execute("DELETE FROM sessoes WHERE expira_em <= ?",
+                                 (_formatar(_agora(agora)),))
+    return cursor.rowcount
