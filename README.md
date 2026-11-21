@@ -4,16 +4,16 @@ Aplicação local de teste em que cada empresa (tenant) cadastra sua conta, faz 
 e gerencia seus clientes, com isolamento total entre empresas. Usa somente a
 biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 
-> Estado atual (fase E1, tarefas "estrutura-projeto", "migracao-inicial" e
-> "executor-migracoes"): estrutura do projeto, configuração, migração inicial portável
-> (`migrations/0001_inicial.sql`), executor de migrações (`app/db.py`) chamado pelo `run.py`
-> e servidor WSGI mínimo (`GET /api/saude`).
+> Estado atual (fase E1, tarefas "estrutura-projeto", "migracao-inicial",
+> "executor-migracoes" e "hash-senha"): estrutura do projeto, configuração, migração inicial portável
+> (`migrations/0001_inicial.sql`), executor de migrações (`app/db.py`) chamado pelo `run.py`,
+> hash de senha com scrypt (`app/seguranca.py`) e servidor WSGI mínimo (`GET /api/saude`).
 > Cadastro, login e CRUD entram nas próximas tarefas.
 
 ## Estrutura
 
 ```
-app/            pacote Python (config.py, db.py, migracoes.py, servidor.py)
+app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, servidor.py)
 migrations/     migrações versionadas em SQL portável (0001_inicial.sql, ...)
 db/             artefatos gerados pela Database Factory (não usados pela aplicação)
 static/         frontend HTML/CSS/JS sem dependências
@@ -83,5 +83,13 @@ Os testes usam diretórios temporários (não tocam no banco nem no segredo loca
   `migrations/`. Os arquivos de `db/` não foram alterados (regra de não reescrever migrações).
   Um banco criado antes com o esquema de `db/` é recusado com uma mensagem clara; como só contém
   dados fictícios, basta apagá-lo.
+- **Senhas** (`app/seguranca.py`): `gerar_hash(senha)` usa `hashlib.scrypt` (n=2^14, r=8, p=1,
+  dklen=64) com sal aleatório de 16 bytes de `secrets` por hash e grava
+  `scrypt$n$r$p$sal_hex$hash_hex` (a mesma senha gera hashes diferentes; nunca se grava texto
+  puro, e o `CHECK` do banco só aceita `scrypt$...`). `verificar_senha(senha, armazenado)` lê os
+  parâmetros do próprio valor e compara com `hmac.compare_digest` (tempo constante). Valores
+  malformados ou com parâmetros fora de limites seguros (n até 2^20, r até 32, p até 16, hex
+  estrito) devolvem `False` em vez de exceção, evitando consumo excessivo de memória se o banco
+  for adulterado. O tamanho mínimo de senha será validado na camada da API.
 - **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta será filtrada pela empresa da sessão.
 - **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).
