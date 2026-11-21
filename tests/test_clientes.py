@@ -59,11 +59,13 @@ class TestCrud(BaseClientes):
         self.assertEqual(c["status"], "inativo")
         self.assertEqual(clientes.obter(self.con, "emp-a", c["id"]), c)
 
-    def test_ids_enviados_sao_ignorados(self):
-        c = clientes.criar(self.con, "emp-a", {"nome": "Ana", "id": "forjado", "empresa_id": "emp-b"})
-        self.assertNotEqual(c["id"], "forjado")
-        self.assertEqual(clientes.listar(self.con, "emp-b"), [])
-        self.assertEqual(len(clientes.listar(self.con, "emp-a")), 1)
+    def test_ids_enviados_sao_rejeitados(self):
+        for extra in ({"id": "forjado"}, {"empresa_id": "emp-b"}):
+            with self.subTest(extra=extra):
+                campo = next(iter(extra))
+                self.assertErro400(clientes.criar, self.con, "emp-a", {"nome": "Ana", **extra},
+                                   campo=campo)
+        self.assertEqual(self.contar(), 0)
 
     def test_obter_inexistente(self):
         self.assertIsNone(clientes.obter(self.con, "emp-a", "nao-existe"))
@@ -169,9 +171,10 @@ class TestValidacao(BaseClientes):
         self.assertEqual(self.contar(), 0)
 
     def test_limites_aceitos(self):
-        c = clientes.criar(self.con, "emp-a", {"nome": "n" * 200, "telefone": "1" * 40,
+        c = clientes.criar(self.con, "emp-a", {"nome": "n" * 120, "telefone": "1" * 30,
                                                "observacoes": "o" * 2000, "email": ""})
-        self.assertEqual(len(c["nome"]), 200)
+        self.assertEqual(len(c["nome"]), 120)
+        self.assertEqual(len(c["telefone"]), 30)
         self.assertIsNone(c["email"])
 
     def test_atualizar_invalido_nao_muda_nada(self):
@@ -181,6 +184,84 @@ class TestValidacao(BaseClientes):
         self.assertErro400(clientes.atualizar, self.con, "emp-a", c["id"], {"status": "x"}, campo="status")
         self.assertErro400(clientes.atualizar, self.con, "emp-a", c["id"], {})
         self.assertErro400(clientes.atualizar, self.con, "emp-a", c["id"], {"empresa_id": "emp-b"})
+        self.assertEqual(self.linhas(), antes)
+
+
+class TestValidarCliente(BaseClientes):
+    """Testes diretos de clientes.validar_cliente(dados, parcial)."""
+
+    def erro(self, dados, parcial=False):
+        with self.assertRaises(ErroHttp) as ctx:
+            clientes.validar_cliente(dados, parcial)
+        self.assertEqual(ctx.exception.status, 400)
+        return ctx.exception.mensagem
+
+    def test_criacao_com_padroes(self):
+        self.assertEqual(clientes.validar_cliente({"nome": " Ana "}, False),
+                         {"nome": "Ana", "status": "ativo", "email": None,
+                          "telefone": None, "observacoes": None})
+
+    def test_nome(self):
+        self.assertIn("nome", self.erro({}))
+        self.assertIn("nome", self.erro({"nome": "  "}))
+        self.assertIn("nome", self.erro({"nome": "n" * 121}))
+        self.assertIn("nome", self.erro({"nome": ["Ana"]}))
+        self.assertEqual(clientes.validar_cliente({"nome": "  " + "n" * 120 + "  "})["nome"],
+                         "n" * 120)
+        self.assertEqual(clientes.validar_cliente({"nome": "x"})["nome"], "x")
+
+    def test_email(self):
+        self.assertIn("email", self.erro({"nome": "Ana", "email": "ana@"}))
+        self.assertIn("email", self.erro({"nome": "Ana", "email": "a b@exemplo.test"}))
+        longo = "a" * 245 + "@exemplo.test"  # 258 caracteres
+        self.assertIn("email", self.erro({"nome": "Ana", "email": longo}))
+        no_limite = "a" * 241 + "@exemplo.test"  # 254 caracteres
+        self.assertEqual(len(no_limite), 254)
+        self.assertEqual(clientes.validar_cliente({"nome": "Ana", "email": no_limite})["email"],
+                         no_limite)
+        self.assertIsNone(clientes.validar_cliente({"nome": "Ana", "email": None})["email"])
+
+    def test_telefone(self):
+        for valido in ("+55 (11) 0000-0000", "1234", "1" * 30):
+            with self.subTest(telefone=valido):
+                self.assertEqual(clientes.validar_cliente({"telefone": valido}, True)["telefone"],
+                                 valido)
+        for invalido in ("1" * 31, "abc", "11#22", "0000.0000", "+55\t11", 1100):
+            with self.subTest(telefone=invalido):
+                self.assertIn("telefone", self.erro({"nome": "Ana", "telefone": invalido}))
+
+    def test_observacoes(self):
+        self.assertEqual(clientes.validar_cliente({"observacoes": "o" * 2000}, True)["observacoes"],
+                         "o" * 2000)
+        self.assertIn("observacoes", self.erro({"nome": "Ana", "observacoes": "o" * 2001}))
+        self.assertIn("observacoes", self.erro({"nome": "Ana", "observacoes": 5}))
+
+    def test_status(self):
+        self.assertEqual(clientes.validar_cliente({"status": "inativo"}, True), {"status": "inativo"})
+        for invalido in ("Ativo", "", None, 1, True):
+            with self.subTest(status=invalido):
+                self.assertIn("status", self.erro({"nome": "Ana", "status": invalido}))
+
+    def test_campos_desconhecidos(self):
+        for campo in ("id", "empresa_id", "criado_em", "outro"):
+            for parcial in (False, True):
+                with self.subTest(campo=campo, parcial=parcial):
+                    self.assertIn(campo, self.erro({"nome": "Ana", campo: "x"}, parcial))
+
+    def test_parcial(self):
+        self.assertEqual(clientes.validar_cliente({"email": " A@Exemplo.TEST "}, True),
+                         {"email": "a@exemplo.test"})
+        self.erro({}, True)
+        self.assertIn("nome", self.erro({"nome": ""}, True))
+        self.erro(None, True)
+        self.erro("texto", False)
+
+    def test_atualizar_invalido_nao_muda_nada(self):
+        c = clientes.criar(self.con, "emp-a", {"nome": "Ana"})
+        antes = self.linhas()
+        for dados in ({"telefone": "abc"}, {"id": "outro"}, {"nome": "n" * 121}):
+            with self.subTest(dados=dados):
+                self.assertErro400(clientes.atualizar, self.con, "emp-a", c["id"], dados)
         self.assertEqual(self.linhas(), antes)
 
 

@@ -184,11 +184,14 @@ Cobertura da fase 1:
   tudo. Cliente de outra empresa é tratado como inexistente (`None`/`False`, que a API
   transformará em 404) e nada é alterado. A busca usa `LOWER(nome) LIKE LOWER(?) ESCAPE '\'`
   com `%`, `_` e `\` escapados (são buscados literalmente), ordena por `LOWER(nome)` e devolve
-  no máximo 200 clientes. Validação (erro 400 citando o campo): `nome` obrigatório (1 a 200),
-  `email` opcional em formato básico (até 254, normalizado em minúsculas), `telefone` até 40,
-  `observacoes` até 2000 (permite quebra de linha), `status` `ativo`/`inativo` (padrão `ativo`),
-  `busca` até 200. Texto vazio em campo opcional vira `null`. `atualizar` é parcial: só os
-  campos enviados mudam; `id` e `empresa_id` enviados são ignorados.
+  no máximo 200 clientes. Validação em `validar_cliente(dados, parcial)` (erro 400 citando o
+  campo): `nome` obrigatório na criação (1 a 120 depois de aparar), `email` opcional em formato
+  básico (até 254, normalizado em minúsculas), `telefone` opcional até 30 só com dígitos,
+  espaços e `+ ( ) -`, `observacoes` até 2000 (permite quebra de linha), `status`
+  `ativo`/`inativo` (padrão `ativo`), `busca` até 200. Texto vazio em campo opcional vira
+  `null`; tipo errado é rejeitado. Campos desconhecidos — inclusive `id` e `empresa_id` — são
+  rejeitados com 400 (a empresa vem só da sessão). `atualizar` é parcial: só os campos
+  enviados mudam, e uma entrada inválida não altera nada no banco.
 - **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta é filtrada pela empresa da sessão.
 - **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).
   No SQLite, `LOWER` só converte letras ASCII, então a busca ignora maiúsculas/minúsculas em

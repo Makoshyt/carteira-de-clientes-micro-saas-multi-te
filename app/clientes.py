@@ -12,22 +12,26 @@ Funções (todas recebem a conexão como primeiro argumento):
 
 Isolamento multi-tenant: toda query tem ``WHERE empresa_id = ?`` com o ``empresa_id``
 recebido (que, na API, vem só da sessão). Um cliente de outra empresa é tratado como
-inexistente. Campos como ``id`` e ``empresa_id`` dentro de ``dados`` são ignorados.
+inexistente. Campos desconhecidos em ``dados`` (inclusive ``id`` e ``empresa_id``) são
+rejeitados com 400 por ``validar_cliente``: a empresa nunca vem do corpo da requisição.
 
 Todo o SQL é parametrizado, sem montagem dinâmica, e portável para PostgreSQL
 (``LOWER``, ``LIKE ... ESCAPE``, ``ORDER BY``, ``LIMIT``).
 
 Validação: erro de entrada levanta ``ErroHttp(400, mensagem)`` citando o campo.
 """
+import re
 import uuid
 
 from app.db import agora_iso
-from app.empresas import validar_email
+from app.empresas import EMAIL_MAX, validar_email
 from app.web import ErroHttp
 
 LIMITE_LISTAGEM = 200
-NOME_MAX = 200
-TELEFONE_MAX = 40
+NOME_MAX = 120
+EMAIL_CLIENTE_MAX = EMAIL_MAX  # 254
+TELEFONE_MAX = 30
+_TELEFONE = re.compile(r"[0-9 +()\-]+")
 OBSERVACOES_MAX = 2000
 BUSCA_MAX = 200
 STATUS_VALIDOS = ("ativo", "inativo")
@@ -106,7 +110,10 @@ def _texto_opcional(campo, valor, maximo, permitir_quebra=False):
 
 
 def validar_telefone(valor):
-    return _texto_opcional("telefone", valor, TELEFONE_MAX)
+    telefone = _texto_opcional("telefone", valor, TELEFONE_MAX)
+    if telefone is not None and not _TELEFONE.fullmatch(telefone):
+        raise ErroHttp(400, "telefone deve ter só dígitos, espaços e os sinais + ( ) -")
+    return telefone
 
 
 def validar_observacoes(valor):
@@ -128,15 +135,19 @@ _VALIDADORES = {
 }
 
 
-def validar_dados(dados, parcial=False):
-    """Valida ``dados`` e devolve só os campos conhecidos, normalizados.
+def validar_cliente(dados, parcial=False):
+    """Valida ``dados`` e devolve os campos normalizados.
 
     Com ``parcial=False`` (criação) ``nome`` é obrigatório e ``status`` assume
     ``'ativo'``. Com ``parcial=True`` (atualização) só os campos presentes são
-    validados, e pelo menos um campo conhecido é exigido.
+    validados, e pelo menos um campo é exigido. Campos desconhecidos (ex.:
+    ``id``, ``empresa_id``) levantam ``ErroHttp(400)`` citando o campo.
     """
     if not isinstance(dados, dict):
         raise ErroHttp(400, "o corpo deve ser um objeto JSON")
+    desconhecidos = sorted(str(c) for c in dados if c not in CAMPOS)
+    if desconhecidos:
+        raise ErroHttp(400, f"campo não permitido: {', '.join(desconhecidos)}")
     limpos = {}
     for campo in CAMPOS:
         if campo in dados:
@@ -151,6 +162,9 @@ def validar_dados(dados, parcial=False):
         raise ErroHttp(400, "nenhum campo para atualizar (use nome, email, telefone, "
                             "observacoes ou status)")
     return limpos
+
+
+validar_dados = validar_cliente  # nome antigo, mantido por compatibilidade
 
 
 def validar_busca(busca):
@@ -219,7 +233,7 @@ def obter(conexao, empresa_id, cliente_id):
 def criar(conexao, empresa_id, dados):
     """Valida e grava um novo cliente da empresa; devolve o cliente criado."""
     _exigir_empresa(empresa_id)
-    limpos = validar_dados(dados)
+    limpos = validar_cliente(dados)
     cliente_id = str(uuid.uuid4())
     agora = agora_iso()
     with conexao:
@@ -232,7 +246,7 @@ def criar(conexao, empresa_id, dados):
 def atualizar(conexao, empresa_id, cliente_id, dados):
     """Atualiza só os campos enviados; devolve o cliente ou None se não for da empresa."""
     _exigir_empresa(empresa_id)
-    limpos = validar_dados(dados, parcial=True)
+    limpos = validar_cliente(dados, parcial=True)
     atual = obter(conexao, empresa_id, cliente_id)
     if atual is None:
         return None
