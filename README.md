@@ -16,6 +16,9 @@ biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 > Fase E2 (em andamento): camada de acesso a dados de clientes (`app/clientes.py`) com
 > isolamento por empresa e as rotas `GET`/`POST /api/clientes` e
 > `GET`/`PUT`/`DELETE /api/clientes/{id}` (`app/api_clientes.py`).
+> Fase E3 (em andamento): arquivos estáticos servidos pelo backend e frontend em `static/` com
+> cadastro de empresa, login/logout e a tela de gestão de clientes (lista, busca, criar, editar,
+> excluir).
 
 ## Estrutura
 
@@ -176,7 +179,17 @@ Cobertura da fase 1:
   `sessionStorage` (some ao fechar a aba) e, ao carregar, confere a sessão com `GET /api/me`
   (401 descarta o token). "Sair" chama `POST /api/logout` e apaga o token local mesmo se a API
   falhar. Todo texto vindo da API ou do usuário entra no DOM por `textContent`, nunca `innerHTML`.
-  Verificações estáticas em `tests/test_frontend.py`.
+  Depois do login, a tela de clientes mostra o nome da empresa (`/api/me`), a lista
+  (`GET /api/clientes`, busca por nome ao enviar ou enquanto digita, com espera de 300 ms; só a
+  resposta da busca mais recente é desenhada) e um formulário único de criar/editar (nome
+  obrigatório, e-mail, telefone, observações e status `ativo`/`inativo`; os `maxlength` batem com a
+  validação do backend). "Editar" carrega o cliente com `GET /api/clientes/{id}` e salva com `PUT`
+  (campos esvaziados são limpos no servidor); "Excluir" pede confirmação e chama `DELETE`. Erros de
+  validação (400) aparecem junto ao formulário sem perder o que foi digitado; 404 recarrega a lista.
+  Qualquer 401 numa rota de clientes apaga o token e volta para o login, e ao sair a lista e o
+  formulário são limpos para não deixar dados de uma empresa na página.
+  Verificações estáticas em `tests/test_frontend.py` (inclusive que todo id/campo usado no JS
+  existe no HTML e que toda chamada de clientes passa pelo tratamento de 401).
   - Corpo: limitado a 64 KB pelo `Content-Length` **antes** de ler (acima disso, 413). Corpo vazio,
     `Content-Length` inválido ou incompleto, UTF-8 inválido, JSON inválido (inclusive `NaN`/`Infinity`
     e aninhamento excessivo) ou que não seja objeto -> 400.

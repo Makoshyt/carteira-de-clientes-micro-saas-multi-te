@@ -46,9 +46,61 @@
       </form>
     </section>
 
-    <section id="tela-principal" class="cartao" hidden>
-      <h2 id="titulo-empresa">Sua empresa</h2>
-      <p>Você está conectado.</p>
+    <section id="tela-principal" class="tela-principal" hidden>
+      <h2 id="titulo-empresa" class="titulo-empresa">Sua empresa</h2>
+
+      <div class="colunas">
+        <section class="cartao" aria-labelledby="titulo-lista">
+          <h3 id="titulo-lista">Clientes</h3>
+          <form id="form-busca" class="busca" role="search" novalidate>
+            <label for="campo-busca" class="rotulo-oculto">Buscar por nome</label>
+            <input type="search" id="campo-busca" name="busca" placeholder="Buscar por nome" maxlength="200" autocomplete="off">
+            <button type="submit">Buscar</button>
+            <button type="button" id="botao-limpar-busca" class="secundario">Limpar</button>
+          </form>
+          <p id="estado-lista" class="estado-lista" aria-live="polite"></p>
+          <table id="tabela-clientes" class="tabela" hidden>
+            <thead>
+              <tr>
+                <th scope="col">Nome</th>
+                <th scope="col">E-mail</th>
+                <th scope="col">Telefone</th>
+                <th scope="col">Status</th>
+                <th scope="col">Ações</th>
+              </tr>
+            </thead>
+            <tbody id="lista-clientes"></tbody>
+          </table>
+        </section>
+
+        <form id="form-cliente" class="cartao" novalidate>
+          <h3 id="titulo-form-cliente">Novo cliente</h3>
+          <p id="erro-form-cliente" class="mensagem erro" role="alert" hidden></p>
+          <input type="hidden" name="cliente_id" value="">
+          <label>Nome (obrigatório)
+            <input type="text" name="cliente_nome" required maxlength="120" autocomplete="off">
+          </label>
+          <label>E-mail
+            <input type="email" name="cliente_email" maxlength="254" autocomplete="off">
+          </label>
+          <label>Telefone
+            <input type="tel" name="cliente_telefone" maxlength="30" autocomplete="off">
+          </label>
+          <label>Observações
+            <textarea name="cliente_observacoes" rows="4" maxlength="2000"></textarea>
+          </label>
+          <label>Status
+            <select name="cliente_status">
+              <option value="ativo" selected>ativo</option>
+              <option value="inativo">inativo</option>
+            </select>
+          </label>
+          <div class="acoes-form">
+            <button type="submit" id="botao-salvar-cliente">Criar cliente</button>
+            <button type="button" id="botao-cancelar-edicao" class="secundario" hidden>Cancelar edição</button>
+          </div>
+        </form>
+      </div>
     </section>
   </main>
 </body>
