@@ -13,12 +13,13 @@ biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 > padronizados e exigência de autenticação (`app/web.py`) e as rotas `GET /api/saude`,
 > `POST /api/empresas`, `POST /api/login`, `POST /api/logout` e `GET /api/me`
 > (`app/servidor.py`, `app/empresas.py`, `app/autenticacao.py`).
-> O CRUD de clientes entra nas próximas tarefas.
+> Fase E2 (em andamento): camada de acesso a dados de clientes (`app/clientes.py`) com
+> isolamento por empresa; as rotas `/api/clientes` entram nas próximas tarefas.
 
 ## Estrutura
 
 ```
-app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py, empresas.py, autenticacao.py)
+app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py, empresas.py, autenticacao.py, clientes.py)
 migrations/     migrações versionadas em SQL portável (0001_inicial.sql, ...)
 db/             artefatos gerados pela Database Factory (não usados pela aplicação)
 static/         frontend HTML/CSS/JS sem dependências
@@ -175,5 +176,20 @@ Cobertura da fase 1:
   Cada login cria uma sessão própria; `expira_em` (ISO-8601 UTC) = agora + `CARTEIRA_TOKEN_TTL`.
   O logout apaga só a sessão do token usado (outras sessões do mesmo usuário continuam válidas) e
   responde 204. `/api/me` consulta usuário e empresa pelos ids da sessão, nunca por dados do cliente.
-- **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta será filtrada pela empresa da sessão.
+- **Repositório de clientes** (`app/clientes.py`): `listar(conexao, empresa_id, busca=None)`,
+  `obter(conexao, empresa_id, id)`, `criar(conexao, empresa_id, dados)`,
+  `atualizar(conexao, empresa_id, id, dados)` e `excluir(conexao, empresa_id, id)`. A conexão é
+  o primeiro argumento (na API, `req.conexao`). Todo SQL é fixo, parametrizado e tem
+  `WHERE empresa_id = ?`; sem `empresa_id` a função recusa (`ValueError`) em vez de consultar
+  tudo. Cliente de outra empresa é tratado como inexistente (`None`/`False`, que a API
+  transformará em 404) e nada é alterado. A busca usa `LOWER(nome) LIKE LOWER(?) ESCAPE '\'`
+  com `%`, `_` e `\` escapados (são buscados literalmente), ordena por `LOWER(nome)` e devolve
+  no máximo 200 clientes. Validação (erro 400 citando o campo): `nome` obrigatório (1 a 200),
+  `email` opcional em formato básico (até 254, normalizado em minúsculas), `telefone` até 40,
+  `observacoes` até 2000 (permite quebra de linha), `status` `ativo`/`inativo` (padrão `ativo`),
+  `busca` até 200. Texto vazio em campo opcional vira `null`. `atualizar` é parcial: só os
+  campos enviados mudam; `id` e `empresa_id` enviados são ignorados.
+- **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta é filtrada pela empresa da sessão.
 - **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).
+  No SQLite, `LOWER` só converte letras ASCII, então a busca ignora maiúsculas/minúsculas em
+  letras sem acento, mas não em letras acentuadas (`Á` x `á`); no PostgreSQL `LOWER` trata Unicode.
