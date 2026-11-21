@@ -95,6 +95,7 @@ Cobertura da fase 1:
 | `GET`/`POST /api/clientes`: 401 sem token, 201/400, busca e isolamento entre empresas | `test_api_clientes.py` |
 | `GET`/`PUT`/`DELETE /api/clientes/{id}`: 401, 200/204, PUT parcial com 400 citando o campo, 404 idêntico para id inexistente e de outra empresa sem alterar o banco | `test_api_clientes_item.py` |
 | Fluxo CRUD de ponta a ponta: criar (201), entradas inválidas e JSON malformado (400), corpo acima de 64 KB (413), listar, busca sem diferenciar maiúsculas com `%`, `_` e `\` tratados como literais, obter, PUT parcial, excluir e depois 404, e 401 em todas as rotas de clientes sem token válido | `test_crud_clientes.py` |
+| Isolamento entre empresas A e B com clientes de nomes iguais: listagem e busca de B sem nada de A; GET/PUT/DELETE de B sobre id de A com 404 idêntico ao de id inexistente e registro de A intacto no banco; `empresa_id` no corpo do POST/PUT recusado (400) e na query ou em cabeçalhos ignorado; token de A com assinatura válida só acessa A; token de sessão inexistente ou assinado com outro segredo recebe 401 | `test_isolamento.py` |
 
 ## Decisões técnicas
 
