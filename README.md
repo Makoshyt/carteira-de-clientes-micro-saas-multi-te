@@ -71,6 +71,19 @@ python3 -m unittest discover -s tests -v
 ```
 
 Os testes usam diretórios temporários (não tocam no banco nem no segredo locais) e não usam rede.
+A maioria chama a app WSGI diretamente; `tests/test_fluxo_http.py` sobe o servidor `wsgiref`
+real numa porta livre de `127.0.0.1` (numa thread) e percorre o fluxo da fase 1 de ponta a ponta.
+
+Cobertura da fase 1:
+
+| Assunto | Arquivos |
+|---|---|
+| Migrações idempotentes, um registro por versão em `schema_migrations` | `test_db.py`, `test_migracoes.py`, `test_estrutura.py`, `test_fluxo_http.py` |
+| Hash e verificação de senha (scrypt, sal único) | `test_seguranca.py`, `test_empresas.py` |
+| Cadastro válido (201), e-mail duplicado (409), entradas inválidas (400) | `test_empresas.py`, `test_fluxo_http.py` |
+| Login certo e errado; token adulterado, expirado, ausente ou de outro segredo (401) | `test_autenticacao.py`, `test_token.py`, `test_web.py`, `test_fluxo_http.py` |
+| Logout revoga o token; `/api/me` | `test_autenticacao.py`, `test_fluxo_http.py` |
+| Erros JSON padronizados (400, 401, 404, 405, 409, 413, 500) | `test_web.py`, `test_fluxo_http.py` |
 
 ## Decisões técnicas
 
