@@ -1,8 +1,9 @@
 # Migrações
 
 As migrações versionadas usadas pela aplicação ficam aqui, em `migrations/NNNN_nome.sql`
-(quatro dígitos, nome em minúsculas). Elas são aplicadas em ordem por `app/migracoes.py`
-(chamado pelo `run.py`), cada uma numa transação própria, e registradas em
+(quatro dígitos, nome em minúsculas). Elas são aplicadas em ordem numérica por
+`migrar(conexao)` em `app/db.py` (o `run.py` usa o atalho `app/migracoes.aplicar(caminho)`),
+cada uma numa transação própria, e registradas em
 `schema_migrations` (versão, sha256 do arquivo e data UTC). Aplicar de novo não faz nada.
 
 Regras:

@@ -4,15 +4,16 @@ Aplicação local de teste em que cada empresa (tenant) cadastra sua conta, faz 
 e gerencia seus clientes, com isolamento total entre empresas. Usa somente a
 biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 
-> Estado atual (fase E1, tarefas "estrutura-projeto" e "migracao-inicial"): estrutura do
-> projeto, configuração, migração inicial portável (`migrations/0001_inicial.sql`)
-> aplicada pelo `run.py` e servidor WSGI mínimo (`GET /api/saude`).
+> Estado atual (fase E1, tarefas "estrutura-projeto", "migracao-inicial" e
+> "executor-migracoes"): estrutura do projeto, configuração, migração inicial portável
+> (`migrations/0001_inicial.sql`), executor de migrações (`app/db.py`) chamado pelo `run.py`
+> e servidor WSGI mínimo (`GET /api/saude`).
 > Cadastro, login e CRUD entram nas próximas tarefas.
 
 ## Estrutura
 
 ```
-app/            pacote Python (config.py, migracoes.py, servidor.py)
+app/            pacote Python (config.py, db.py, migracoes.py, servidor.py)
 migrations/     migrações versionadas em SQL portável (0001_inicial.sql, ...)
 db/             artefatos gerados pela Database Factory (não usados pela aplicação)
 static/         frontend HTML/CSS/JS sem dependências
@@ -56,10 +57,16 @@ Os testes usam diretórios temporários (não tocam no banco nem no segredo loca
 - **Configuração por ambiente** com validação (porta 1–65535, TTL positivo, segredo mínimo de 32
   caracteres); valores inválidos geram `ErroConfiguracao` em vez de rodar com padrões silenciosos.
   O `repr` da configuração mascara o segredo.
-- **Migrações**: arquivos `migrations/NNNN_nome.sql`, aplicados em ordem por `app/migracoes.py`
-  (cada um numa transação; se falhar, nada fica aplicado) e registrados em `schema_migrations`
-  com sha256 e data UTC. É idempotente, e uma migração já aplicada não pode ser alterada
-  (mudanças vão num novo `0002_*.sql`).
+- **Conexão** (`app/db.py`, `conectar(caminho)`): toda conexão SQLite liga `PRAGMA foreign_keys=ON`
+  (o SQLite vem com chaves estrangeiras desligadas) e usa `row_factory=sqlite3.Row`.
+- **Migrações**: arquivos `migrations/NNNN_nome.sql`, aplicados em ordem numérica por
+  `app/db.py` (`migrar(conexao)`; `app/migracoes.aplicar(caminho)` é um atalho que abre e fecha
+  a conexão). Cada um roda numa transação explícita (`BEGIN` ... `COMMIT`; se falhar, `ROLLBACK`
+  e nada dele fica aplicado) e é registrado em `schema_migrations` (versão como chave primária,
+  sha256 e data UTC). É idempotente: só as versões ainda não registradas são aplicadas, sem
+  duplicar registros. Uma migração já aplicada não pode ser alterada (mudanças vão num novo
+  `0002_*.sql`); nomes fora do padrão ou números repetidos são recusados. O executor recusa
+  conexões com transação aberta e devolve a conexão no mesmo `isolation_level` em que a recebeu.
 - **SQL portável (SQLite e PostgreSQL)**: um único conjunto de arquivos, só com `TEXT`, `VARCHAR(n)`,
   `CHECK`, `UNIQUE`, `REFERENCES`, `DEFAULT` literal e `CREATE INDEX`. Sem `AUTOINCREMENT`/`SERIAL`/
   `IDENTITY` e sem funções de data de um banco: **IDs são UUID em texto** gerados em Python e
