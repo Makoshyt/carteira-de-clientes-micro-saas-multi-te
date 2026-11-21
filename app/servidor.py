@@ -1,7 +1,9 @@
 """Montagem da aplicação WSGI: registra as rotas da API no roteador de app/web.py.
 
-As rotas de cadastro, login/logout e clientes entram nas próximas tarefas.
+Rotas atuais: GET /api/saude e POST /api/empresas (app/empresas.py).
+As rotas de login/logout e clientes entram nas próximas tarefas.
 """
+from app.empresas import cadastrar_empresa
 from app.web import Aplicacao, Roteador
 
 
@@ -13,6 +15,7 @@ def saude(req):
 def criar_roteador():
     roteador = Roteador()
     roteador.adicionar("GET", "/api/saude", saude)
+    roteador.adicionar("POST", "/api/empresas", cadastrar_empresa)
     return roteador
 
 

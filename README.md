@@ -5,17 +5,18 @@ e gerencia seus clientes, com isolamento total entre empresas. Usa somente a
 biblioteca padrão do Python 3 (sem `pip install`). Dados apenas fictícios.
 
 > Estado atual (fase E1, tarefas "estrutura-projeto", "migracao-inicial",
-> "executor-migracoes", "hash-senha", "token-assinado" e "nucleo-http"): estrutura do projeto,
-> configuração, migração inicial portável (`migrations/0001_inicial.sql`), executor de migrações
-> (`app/db.py`) chamado pelo `run.py`, hash de senha com scrypt e tokens assinados com sessões no
-> banco (`app/seguranca.py`) e núcleo WSGI com roteador, JSON, erros padronizados e exigência de
-> autenticação (`app/web.py`), por enquanto só com `GET /api/saude` (`app/servidor.py`).
-> As rotas de cadastro, login/logout e o CRUD entram nas próximas tarefas.
+> "executor-migracoes", "hash-senha", "token-assinado", "nucleo-http" e "api-cadastro-empresa"):
+> estrutura do projeto, configuração, migração inicial portável (`migrations/0001_inicial.sql`),
+> executor de migrações (`app/db.py`) chamado pelo `run.py`, hash de senha com scrypt e tokens
+> assinados com sessões no banco (`app/seguranca.py`), núcleo WSGI com roteador, JSON, erros
+> padronizados e exigência de autenticação (`app/web.py`) e as rotas `GET /api/saude` e
+> `POST /api/empresas` (`app/servidor.py`, `app/empresas.py`).
+> As rotas de login/logout e o CRUD entram nas próximas tarefas.
 
 ## Estrutura
 
 ```
-app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py)
+app/            pacote Python (config.py, db.py, migracoes.py, seguranca.py, web.py, servidor.py, empresas.py)
 migrations/     migrações versionadas em SQL portável (0001_inicial.sql, ...)
 db/             artefatos gerados pela Database Factory (não usados pela aplicação)
 static/         frontend HTML/CSS/JS sem dependências
@@ -43,6 +44,20 @@ Variáveis de ambiente:
 Se `CARTEIRA_SEGREDO` não estiver definido, um segredo é gerado com
 `secrets.token_hex(32)` e gravado em `.carteira_segredo` (permissão 600, ignorado pelo Git),
 sendo reaproveitado nas execuções seguintes.
+
+### API disponível
+
+| Método e rota | Corpo | Resposta |
+|---|---|---|
+| `GET /api/saude` | — | `200 {"status": "ok"}` |
+| `POST /api/empresas` | `{"nome_empresa", "email", "senha"}` | `201 {"empresa_id", "usuario_id", "email"}`; `400` entrada inválida; `409` e-mail já cadastrado |
+
+Exemplo (dados fictícios):
+
+```
+curl -X POST http://127.0.0.1:8000/api/empresas -H 'Content-Type: application/json' \
+  -d '{"nome_empresa": "Loja Fictícia", "email": "dono@exemplo.test", "senha": "<sua-senha>"}'
+```
 
 ## Como testar
 
@@ -92,7 +107,7 @@ Os testes usam diretórios temporários (não tocam no banco nem no segredo loca
   parâmetros do próprio valor e compara com `hmac.compare_digest` (tempo constante). Valores
   malformados ou com parâmetros fora de limites seguros (n até 2^20, r até 32, p até 16, hex
   estrito) devolvem `False` em vez de exceção, evitando consumo excessivo de memória se o banco
-  for adulterado. O tamanho mínimo de senha será validado na camada da API.
+  for adulterado. O tamanho da senha (8 a 128) é validado na camada da API (`app/empresas.py`).
 - **Tokens e sessões** (`app/seguranca.py`): o token tem o formato `<sessao_id>.<assinatura>`, em
   que `sessao_id` é aleatório (`secrets.token_urlsafe(32)`, 256 bits) e a assinatura é
   HMAC-SHA256(segredo, sessao_id) em base64url sem `=`. O token não carrega dados do usuário: ele
@@ -125,5 +140,14 @@ Os testes usam diretórios temporários (não tocam no banco nem no segredo loca
     diferenciar maiúsculas), valida com `validar_token` e preenche `req.usuario_id`/`req.empresa_id`;
     token ausente, malformado, alterado, expirado ou revogado -> 401 com `WWW-Authenticate: Bearer`.
   - Cada requisição abre a própria conexão SQLite só se precisar e a fecha ao terminar.
+- **Cadastro de empresa** (`app/empresas.py`, `POST /api/empresas`): valida `nome_empresa`
+  (texto, 1 a 120 caracteres após aparar espaços, sem caracteres de controle), `email` (texto,
+  aparado e convertido para minúsculas, até 254 caracteres, formato básico `local@dominio.tld`
+  sem espaços nem `@` extra) e `senha` (texto de 8 a 128 caracteres, sem aparar). O hash scrypt é
+  calculado **antes** de abrir a transação (scrypt é lento de propósito) e os dois `INSERT`
+  (empresa e usuário) rodam numa única transação: se o segundo falhar, nada fica gravado. Os IDs
+  são UUID gerados no servidor; ids enviados no corpo são ignorados. E-mail repetido -> 409
+  (checado antes; se outro cadastro gravar o mesmo e-mail no meio, o `UNIQUE` do banco gera
+  `IntegrityError`, convertido também em 409). A resposta nunca contém senha nem hash.
 - **Multi-tenant**: as tabelas de dados têm `empresa_id`; toda consulta será filtrada pela empresa da sessão.
 - **Limitações**: servidor de desenvolvimento single-thread, sem HTTPS e sem rate limiting (fora do escopo).
